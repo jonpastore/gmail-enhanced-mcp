@@ -1,0 +1,10 @@
+{
+  "name": "gmail-enhanced-mcp",
+  "version": "1.0.0",
+  "description": "Enhanced Gmail MCP server with attachment support",
+  "mcp": {
+    "command": "python",
+    "args": ["-m", "gmail_mcp"],
+    "cwd": "/home/jon/projects/gmail-enhanced-mcp"
+  }
+}
