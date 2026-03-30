@@ -16,7 +16,12 @@ from .tools import ToolRegistry
 
 class ProtocolHandler:
     def __init__(self) -> None:
-        self.tool_registry = ToolRegistry()
+        from .config import Config
+        from .gmail_client import GmailClient
+
+        cfg = Config()
+        client = GmailClient(cfg)
+        self.tool_registry = ToolRegistry(gmail_client=client)
         self.initialized = False
 
     def handle_request(self, raw_request: dict[str, Any]) -> Optional[dict[str, Any]]:
