@@ -137,34 +137,24 @@ Load:
 launchctl load ~/Library/LaunchAgents/com.gmail-enhanced-mcp.plist
 ```
 
-### 7. Cloudflare Tunnel
+### 7. Network Access (Tailscale)
 
-```bash
-cloudflared tunnel create gmail-mcp
-cloudflared tunnel route dns gmail-mcp gmail-mcp.degenito.ai
-cloudflared tunnel --config ~/.cloudflared/config.yml run gmail-mcp
-```
+All devices (laptop, Mac Mini, phone) are on the Tailscale VPN. No tunnels or public DNS needed.
 
-`config.yml`:
-```yaml
-tunnel: <tunnel-id>
-credentials-file: ~/.cloudflared/<tunnel-id>.json
-ingress:
-  - hostname: gmail-mcp.degenito.ai
-    service: http://localhost:8420
-  - service: http_status:404
-```
+Tailscale hostnames:
+- Dev (laptop): `morpheus-ai` / `100.109.84.99`
+- Prod (Mac Mini): `jons-mac-mini` / `100.96.244.44`
+- Phone: `oneplus-11-5g`
 
-For persistent tunnel, install as service:
-```bash
-cloudflared service install
-```
+The MCP server is accessible at `http://<tailscale-hostname>:8420/mcp/` from any device on the tailnet.
 
 ### 8. Mobile Setup (Claude App)
 
 In Claude mobile app settings > MCP Servers > Add:
-- URL: `https://gmail-mcp.degenito.ai/mcp`
+- URL: `http://jons-mac-mini:8420/mcp/`
 - Auth: `Bearer YOUR_MCP_AUTH_TOKEN`
+
+Ensure Tailscale is running on your phone before connecting.
 
 ### 9. Verify
 
@@ -179,5 +169,5 @@ curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8420/mcp -X POST -H 
 
 - Token expired: Re-run `python -m gmail_mcp auth --provider gmail|outlook`
 - Port in use: Change HTTP_PORT in .env
-- Tunnel not connecting: Check `cloudflared tunnel info gmail-mcp`
-- Claude Desktop not connecting: Verify URL in claude_desktop_config.json matches port
+- Tailscale not connecting: Run `tailscale status` to verify devices are online
+- Claude Desktop not connecting: Verify URL in claude_desktop_config.json matches Tailscale hostname and port
