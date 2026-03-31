@@ -1,9 +1,13 @@
 from __future__ import annotations
+
 from typing import Any
+
 from ..gmail_client import GmailClient
+
 
 def _text_content(text: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}]}
+
 
 def handle_download_attachment(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
     message_id = args.get("messageId")

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -22,21 +21,21 @@ class TokenManager:
     def __init__(self, client_secret_path: str, token_path: str) -> None:
         self._client_secret_path = Path(client_secret_path)
         self._token_path = Path(token_path)
-        self._cached_creds: Optional[Credentials] = None
+        self._cached_creds: Credentials | None = None
 
-    def load_token(self) -> Optional[Credentials]:
+    def load_token(self) -> Credentials | None:
         if not self._token_path.exists():
             return None
         try:
             data = json.loads(self._token_path.read_text())
-            return Credentials.from_authorized_user_info(data, SCOPES)
+            return Credentials.from_authorized_user_info(data, SCOPES)  # type: ignore[no-any-return,no-untyped-call]
         except Exception as e:
             logger.warning(f"Failed to load token: {e}")
             return None
 
     def save_token(self, creds: Credentials) -> None:
         self._token_path.parent.mkdir(parents=True, exist_ok=True)
-        self._token_path.write_text(creds.to_json())
+        self._token_path.write_text(creds.to_json())  # type: ignore[no-untyped-call]
         logger.info("Token saved")
 
     def get_credentials(self) -> Credentials:
@@ -45,14 +44,12 @@ class TokenManager:
 
         creds = self.load_token()
         if creds is None:
-            raise RuntimeError(
-                "Not authenticated. Run: python -m gmail_mcp auth"
-            )
+            raise RuntimeError("Not authenticated. Run: python -m gmail_mcp auth")
 
         if not creds.valid:
             if creds.expired and creds.refresh_token:
                 logger.info("Refreshing expired token")
-                creds.refresh(Request())
+                creds.refresh(Request())  # type: ignore[no-untyped-call]
                 self.save_token(creds)
             else:
                 raise RuntimeError(

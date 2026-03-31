@@ -29,9 +29,7 @@ class TestProtocolHandler:
         handler = ProtocolHandler.__new__(ProtocolHandler)
         handler.initialized = False
         handler.tool_registry = MagicMock()
-        result = handler.handle_request(
-            {"jsonrpc": "2.0", "method": "initialized"}
-        )
+        result = handler.handle_request({"jsonrpc": "2.0", "method": "initialized"})
         assert result is None
         assert handler.initialized is True
 
@@ -50,18 +48,14 @@ class TestProtocolHandler:
         handler = ProtocolHandler.__new__(ProtocolHandler)
         handler.initialized = True
         handler.tool_registry = MagicMock()
-        result = handler.handle_request(
-            {"jsonrpc": "2.0", "method": "nonexistent", "id": 3}
-        )
+        result = handler.handle_request({"jsonrpc": "2.0", "method": "nonexistent", "id": 3})
         assert result["error"]["code"] == -32601
 
     def test_tools_call_delegates_to_registry(self) -> None:
         handler = ProtocolHandler.__new__(ProtocolHandler)
         handler.initialized = True
         mock_registry = MagicMock()
-        mock_registry.execute_tool.return_value = {
-            "content": [{"type": "text", "text": "result"}]
-        }
+        mock_registry.execute_tool.return_value = {"content": [{"type": "text", "text": "result"}]}
         handler.tool_registry = mock_registry
         result = handler.handle_request(
             {

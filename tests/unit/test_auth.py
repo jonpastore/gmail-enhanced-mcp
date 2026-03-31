@@ -74,7 +74,7 @@ class TestTokenManager:
             mock_creds.to_json.return_value = '{"token": "refreshed"}'
             mock_creds_cls.from_authorized_user_info.return_value = mock_creds
 
-            creds = mgr.get_credentials()
+            mgr.get_credentials()
             mock_creds.refresh.assert_called_once()
 
     def test_get_credentials_raises_when_no_token(self, tmp_path: Path) -> None:

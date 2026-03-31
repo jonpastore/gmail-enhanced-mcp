@@ -8,7 +8,12 @@ from ..models import ToolCallParams
 from .attachments import handle_download_attachment
 from .drafts import handle_create_draft, handle_list_drafts, handle_send_draft, handle_update_draft
 from .labels import handle_list_labels, handle_modify_thread_labels
-from .search import handle_get_profile, handle_read_message, handle_read_thread, handle_search_messages
+from .search import (
+    handle_get_profile,
+    handle_read_message,
+    handle_read_thread,
+    handle_search_messages,
+)
 from .send import handle_send_email
 from .templates import handle_save_template, handle_use_template
 
@@ -25,9 +30,16 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "q": {"type": "string", "description": "Gmail search query"},
-                "maxResults": {"type": "integer", "default": 20, "description": "Maximum number of results"},
+                "maxResults": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Maximum number of results",
+                },
                 "pageToken": {"type": "string", "description": "Token for pagination"},
-                "includeSpamTrash": {"type": "boolean", "description": "Include spam and trash results"},
+                "includeSpamTrash": {
+                    "type": "boolean",
+                    "description": "Include spam and trash results",
+                },
             },
             "required": [],
         },
@@ -60,7 +72,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "messageId": {"type": "string", "description": "The message ID containing the attachment"},
+                "messageId": {
+                    "type": "string",
+                    "description": "The message ID containing the attachment",
+                },
                 "attachmentId": {"type": "string", "description": "The attachment ID"},
                 "savePath": {"type": "string", "description": "Local path to save the attachment"},
             },
@@ -78,9 +93,17 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "body": {"type": "string", "description": "Email body content"},
                 "cc": {"type": "string", "description": "CC recipients"},
                 "bcc": {"type": "string", "description": "BCC recipients"},
-                "contentType": {"type": "string", "enum": ["text/plain", "text/html"], "description": "Content type"},
+                "contentType": {
+                    "type": "string",
+                    "enum": ["text/plain", "text/html"],
+                    "description": "Content type",
+                },
                 "threadId": {"type": "string", "description": "Thread ID for replies"},
-                "attachments": {"type": "array", "items": {"type": "object"}, "description": "File attachments"},
+                "attachments": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "File attachments",
+                },
             },
             "required": ["to", "subject", "body"],
         },
@@ -97,8 +120,16 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "body": {"type": "string", "description": "Email body content"},
                 "cc": {"type": "string", "description": "CC recipients"},
                 "bcc": {"type": "string", "description": "BCC recipients"},
-                "contentType": {"type": "string", "enum": ["text/plain", "text/html"], "description": "Content type"},
-                "attachments": {"type": "array", "items": {"type": "object"}, "description": "File attachments"},
+                "contentType": {
+                    "type": "string",
+                    "enum": ["text/plain", "text/html"],
+                    "description": "Content type",
+                },
+                "attachments": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "File attachments",
+                },
             },
             "required": ["draftId"],
         },
@@ -137,8 +168,16 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "body": {"type": "string", "description": "Email body content"},
                 "cc": {"type": "string", "description": "CC recipients"},
                 "bcc": {"type": "string", "description": "BCC recipients"},
-                "contentType": {"type": "string", "enum": ["text/plain", "text/html"], "description": "Content type"},
-                "attachments": {"type": "array", "items": {"type": "object"}, "description": "File attachments"},
+                "contentType": {
+                    "type": "string",
+                    "enum": ["text/plain", "text/html"],
+                    "description": "Content type",
+                },
+                "attachments": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "File attachments",
+                },
             },
             "required": ["to", "body"],
         },
@@ -155,8 +194,16 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "threadId": {"type": "string", "description": "The thread ID to modify"},
-                "addLabelIds": {"type": "array", "items": {"type": "string"}, "description": "Label IDs to add"},
-                "removeLabelIds": {"type": "array", "items": {"type": "string"}, "description": "Label IDs to remove"},
+                "addLabelIds": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Label IDs to add",
+                },
+                "removeLabelIds": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Label IDs to remove",
+                },
             },
             "required": ["threadId"],
         },
@@ -170,8 +217,16 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "name": {"type": "string", "description": "Template name"},
                 "subject": {"type": "string", "description": "Email subject template"},
                 "body": {"type": "string", "description": "Email body template"},
-                "contentType": {"type": "string", "enum": ["text/plain", "text/html"], "description": "Content type"},
-                "variables": {"type": "array", "items": {"type": "string"}, "description": "Template variable names"},
+                "contentType": {
+                    "type": "string",
+                    "enum": ["text/plain", "text/html"],
+                    "description": "Content type",
+                },
+                "variables": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Template variable names",
+                },
             },
             "required": ["name"],
         },
@@ -183,11 +238,18 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Template name"},
-                "variables": {"type": "object", "description": "Variable key-value pairs for substitution"},
+                "variables": {
+                    "type": "object",
+                    "description": "Variable key-value pairs for substitution",
+                },
                 "to": {"type": "string", "description": "Recipient email address"},
                 "cc": {"type": "string", "description": "CC recipients"},
                 "bcc": {"type": "string", "description": "BCC recipients"},
-                "attachments": {"type": "array", "items": {"type": "object"}, "description": "File attachments"},
+                "attachments": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "File attachments",
+                },
             },
             "required": ["name", "variables"],
         },
@@ -226,4 +288,4 @@ class ToolRegistry:
         if handler is None:
             raise ValueError(f"Unknown tool: {params.name}")
         logger.info(f"Executing tool: {params.name}")
-        return handler(params.arguments, self._client)
+        return handler(params.arguments, self._client)  # type: ignore[no-any-return]

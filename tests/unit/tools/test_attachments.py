@@ -1,14 +1,20 @@
 from __future__ import annotations
+
 from unittest.mock import MagicMock
+
 import pytest
+
 from src.tools.attachments import handle_download_attachment
+
 
 class TestDownloadAttachment:
     def test_downloads_and_saves(self, tmp_path) -> None:
         mock_client = MagicMock()
         save = f"{tmp_path}/out.pdf"
         mock_client.download_attachment.return_value = save
-        result = handle_download_attachment({"messageId": "msg_001", "attachmentId": "att_001", "savePath": save}, mock_client)
+        result = handle_download_attachment(
+            {"messageId": "msg_001", "attachmentId": "att_001", "savePath": save}, mock_client
+        )
         assert save in result["content"][0]["text"]
 
     def test_message_id_required(self) -> None:

@@ -1,7 +1,11 @@
 from __future__ import annotations
+
 from unittest.mock import MagicMock
+
 import pytest
+
 from src.tools.labels import handle_list_labels, handle_modify_thread_labels
+
 
 class TestListLabels:
     def test_returns_labels(self) -> None:
@@ -14,11 +18,14 @@ class TestListLabels:
         text = result["content"][0]["text"]
         assert "INBOX" in text and "Important" in text
 
+
 class TestModifyThreadLabels:
     def test_modifies_labels(self) -> None:
         mock_client = MagicMock()
         mock_client.modify_thread_labels.return_value = {"id": "t1"}
-        result = handle_modify_thread_labels({"threadId": "t1", "addLabelIds": ["Label_1"], "removeLabelIds": ["INBOX"]}, mock_client)
+        result = handle_modify_thread_labels(
+            {"threadId": "t1", "addLabelIds": ["Label_1"], "removeLabelIds": ["INBOX"]}, mock_client
+        )
         assert "t1" in result["content"][0]["text"]
 
     def test_thread_id_required(self) -> None:

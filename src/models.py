@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import Any
 
 from pydantic import BaseModel, field_validator
 
@@ -8,8 +8,8 @@ from pydantic import BaseModel, field_validator
 class JsonRpcRequest(BaseModel):
     jsonrpc: str
     method: str
-    params: Optional[dict[str, Any]] = None
-    id: Optional[Union[int, str]] = None
+    params: dict[str, Any] | None = None
+    id: int | str | None = None
 
     @field_validator("jsonrpc")
     @classmethod
@@ -21,21 +21,21 @@ class JsonRpcRequest(BaseModel):
 
 class JsonRpcResponse(BaseModel):
     jsonrpc: str = "2.0"
-    result: Optional[Any] = None
-    error: Optional[dict[str, Any]] = None
-    id: Optional[Union[int, str]] = None
+    result: Any | None = None
+    error: dict[str, Any] | None = None
+    id: int | str | None = None
 
 
 class JsonRpcError(BaseModel):
     code: int
     message: str
-    data: Optional[Any] = None
+    data: Any | None = None
 
 
 class InitializeParams(BaseModel):
     protocolVersion: str
     capabilities: dict[str, Any] = {}
-    clientInfo: Optional[dict[str, str]] = None
+    clientInfo: dict[str, str] | None = None
 
 
 class ToolCallParams(BaseModel):
@@ -45,11 +45,11 @@ class ToolCallParams(BaseModel):
 
 class AttachmentSource(BaseModel):
     type: str
-    path: Optional[str] = None
-    message_id: Optional[str] = None
-    attachment_id: Optional[str] = None
-    url: Optional[str] = None
-    filename: Optional[str] = None
+    path: str | None = None
+    message_id: str | None = None
+    attachment_id: str | None = None
+    url: str | None = None
+    filename: str | None = None
 
     @field_validator("type")
     @classmethod

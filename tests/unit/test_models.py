@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import pytest
+
 from src.models import (
+    ERROR_CODES,
+    AttachmentSource,
     JsonRpcRequest,
     ToolCallParams,
-    InitializeParams,
-    AttachmentSource,
-    ERROR_CODES,
 )
 
 

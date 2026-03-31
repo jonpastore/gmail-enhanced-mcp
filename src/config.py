@@ -14,9 +14,7 @@ class Config:
         self.client_secret_path: str = os.getenv(
             "GOOGLE_CLIENT_SECRET_PATH", "credentials/client_secret.json"
         )
-        self.token_path: str = os.getenv(
-            "GOOGLE_TOKEN_PATH", "credentials/token.json"
-        )
+        self.token_path: str = os.getenv("GOOGLE_TOKEN_PATH", "credentials/token.json")
         self.log_level: str = os.getenv("LOG_LEVEL", "INFO")
         self.log_file: str = os.getenv("LOG_FILE", "mcp_server.log")
 

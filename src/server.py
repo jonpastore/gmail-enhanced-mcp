@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import Any
 
 from loguru import logger
 
@@ -16,7 +17,7 @@ class StdioServer:
         self._stdin = sys.stdin
         self._stdout = sys.stdout
 
-    def read_message(self) -> Optional[Union[dict[str, Any], list[dict[str, Any]]]]:
+    def read_message(self) -> dict[str, Any] | list[dict[str, Any]] | None:
         while True:
             try:
                 line = self._stdin.readline()
@@ -31,7 +32,7 @@ class StdioServer:
                 try:
                     message, index = self.decoder.raw_decode(self.buffer)
                     self.buffer = self.buffer[index:].lstrip()
-                    return message
+                    return message  # type: ignore[no-any-return]
                 except json.JSONDecodeError:
                     if "\n" in self.buffer and len(self.buffer) > 10000:
                         logger.error("Buffer overflow, clearing")
@@ -56,7 +57,7 @@ class StdioServer:
                 self.buffer = ""
                 return None
 
-    def send_response(self, response: Optional[Union[dict[str, Any], list[dict[str, Any]]]]) -> None:
+    def send_response(self, response: dict[str, Any] | list[dict[str, Any]] | None) -> None:
         if response is None:
             return
         try:
@@ -66,7 +67,7 @@ class StdioServer:
         except Exception as e:
             logger.error(f"Error sending response: {e}")
 
-    def run(self, handler: Callable[[dict[str, Any]], Optional[dict[str, Any]]]) -> None:
+    def run(self, handler: Callable[[dict[str, Any]], dict[str, Any] | None]) -> None:
         logger.info("MCP Server starting...")
         while True:
             message = self.read_message()
@@ -75,9 +76,7 @@ class StdioServer:
                 break
             try:
                 if isinstance(message, list):
-                    responses = [
-                        r for msg in message if (r := handler(msg)) is not None
-                    ]
+                    responses = [r for msg in message if (r := handler(msg)) is not None]
                     if responses:
                         self.send_response(responses)
                 else:

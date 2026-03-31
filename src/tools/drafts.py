@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from typing import Any
+
 from ..gmail_client import GmailClient
 
 
@@ -12,11 +14,20 @@ def handle_create_draft(args: dict[str, Any], client: GmailClient) -> dict[str, 
     if not body:
         raise ValueError("body is required")
     result = client.create_draft(
-        to=args.get("to"), subject=args.get("subject"), body=body,
-        content_type=args.get("contentType", "text/plain"), cc=args.get("cc"),
-        bcc=args.get("bcc"), thread_id=args.get("threadId"), attachments=args.get("attachments"),
+        to=args.get("to"),
+        subject=args.get("subject"),
+        body=body,
+        content_type=args.get("contentType", "text/plain"),
+        cc=args.get("cc"),
+        bcc=args.get("bcc"),
+        thread_id=args.get("threadId"),
+        attachments=args.get("attachments"),
     )
-    return _text_content(f"Draft created.\nDraft ID: {result['id']}\nMessage ID: {result['message']['id']}\nUse gmail_send_draft with draftId '{result['id']}' to send.")
+    return _text_content(
+        f"Draft created.\nDraft ID: {result['id']}\n"
+        f"Message ID: {result['message']['id']}\n"
+        f"Use gmail_send_draft with draftId '{result['id']}' to send."
+    )
 
 
 def handle_update_draft(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
@@ -24,15 +35,22 @@ def handle_update_draft(args: dict[str, Any], client: GmailClient) -> dict[str, 
     if not draft_id:
         raise ValueError("draftId is required")
     result = client.update_draft(
-        draft_id=draft_id, to=args.get("to"), subject=args.get("subject"),
-        body=args.get("body", ""), content_type=args.get("contentType", "text/plain"),
-        cc=args.get("cc"), bcc=args.get("bcc"), attachments=args.get("attachments"),
+        draft_id=draft_id,
+        to=args.get("to"),
+        subject=args.get("subject"),
+        body=args.get("body", ""),
+        content_type=args.get("contentType", "text/plain"),
+        cc=args.get("cc"),
+        bcc=args.get("bcc"),
+        attachments=args.get("attachments"),
     )
     return _text_content(f"Draft updated.\nDraft ID: {result['id']}")
 
 
 def handle_list_drafts(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
-    result = client.list_drafts(max_results=args.get("maxResults", 20), page_token=args.get("pageToken"))
+    result = client.list_drafts(
+        max_results=args.get("maxResults", 20), page_token=args.get("pageToken")
+    )
     drafts = result["drafts"]
     if not drafts:
         return _text_content("No drafts found.")
@@ -49,4 +67,7 @@ def handle_send_draft(args: dict[str, Any], client: GmailClient) -> dict[str, An
     if not draft_id:
         raise ValueError("draftId is required")
     result = client.send_draft(draft_id)
-    return _text_content(f"Draft sent successfully.\nMessage ID: {result['id']}\nLabels: {', '.join(result.get('labelIds', []))}")
+    return _text_content(
+        f"Draft sent successfully.\nMessage ID: {result['id']}\n"
+        f"Labels: {', '.join(result.get('labelIds', []))}"
+    )

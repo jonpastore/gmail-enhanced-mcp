@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from loguru import logger
 from pydantic import ValidationError
@@ -24,7 +24,7 @@ class ProtocolHandler:
         self.tool_registry = ToolRegistry(gmail_client=client)
         self.initialized = False
 
-    def handle_request(self, raw_request: dict[str, Any]) -> Optional[dict[str, Any]]:
+    def handle_request(self, raw_request: dict[str, Any]) -> dict[str, Any] | None:
         try:
             request = JsonRpcRequest(**raw_request)
 
@@ -66,7 +66,7 @@ class ProtocolHandler:
                 raw_request.get("id"),
             )
 
-    def _get_method_handler(self, method: str) -> Optional[Any]:
+    def _get_method_handler(self, method: str) -> Any | None:
         handlers: dict[str, Any] = {
             "initialize": self._handle_initialize,
             "tools/list": self._handle_tools_list,
@@ -94,13 +94,11 @@ class ProtocolHandler:
         tool_params = ToolCallParams(**params)
         return self.tool_registry.execute_tool(tool_params)
 
-    def _success_response(
-        self, result: Any, request_id: Optional[int | str]
-    ) -> dict[str, Any]:
+    def _success_response(self, result: Any, request_id: int | str | None) -> dict[str, Any]:
         return {"jsonrpc": "2.0", "result": result, "id": request_id}
 
     def _error_response(
-        self, code: int, message: str, request_id: Optional[int | str]
+        self, code: int, message: str, request_id: int | str | None
     ) -> dict[str, Any]:
         return {
             "jsonrpc": "2.0",

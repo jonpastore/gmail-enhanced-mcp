@@ -29,13 +29,9 @@ class TestSaveTemplate:
 
     def test_name_required(self, tmp_template_dir: Path) -> None:
         with pytest.raises(ValueError, match="name is required"):
-            handle_save_template(
-                {"body": "test"}, MagicMock(), template_dir=tmp_template_dir
-            )
+            handle_save_template({"body": "test"}, MagicMock(), template_dir=tmp_template_dir)
 
-    def test_validates_placeholders_match_variables(
-        self, tmp_template_dir: Path
-    ) -> None:
+    def test_validates_placeholders_match_variables(self, tmp_template_dir: Path) -> None:
         with pytest.raises(ValueError, match="not declared in variables"):
             handle_save_template(
                 {

@@ -10,8 +10,7 @@ from src.server import StdioServer
 
 
 def _roundtrip(*requests: dict[str, Any]) -> list[dict[str, Any]]:
-    with patch("src.config.Config"), \
-         patch("src.gmail_client.GmailClient") as mock_cls:
+    with patch("src.config.Config"), patch("src.gmail_client.GmailClient") as mock_cls:
         mock_client = MagicMock()
         mock_client.get_profile.return_value = {
             "emailAddress": "test@gmail.com",
@@ -37,34 +36,38 @@ def _roundtrip(*requests: dict[str, Any]) -> list[dict[str, Any]]:
 
 class TestStdioRoundtrip:
     def test_initialize(self) -> None:
-        results = _roundtrip({
-            "jsonrpc": "2.0", "method": "initialize",
-            "params": {"protocolVersion": "2024-11-05", "capabilities": {}}, "id": 1,
-        })
+        results = _roundtrip(
+            {
+                "jsonrpc": "2.0",
+                "method": "initialize",
+                "params": {"protocolVersion": "2024-11-05", "capabilities": {}},
+                "id": 1,
+            }
+        )
         assert results[0]["result"]["serverInfo"]["name"] == "gmail-enhanced-mcp"
 
     def test_tools_list_returns_14_tools(self) -> None:
-        results = _roundtrip(
-            {"jsonrpc": "2.0", "method": "tools/list", "params": {}, "id": 2}
-        )
+        results = _roundtrip({"jsonrpc": "2.0", "method": "tools/list", "params": {}, "id": 2})
         assert len(results[0]["result"]["tools"]) == 14
 
     def test_tool_call_get_profile(self) -> None:
         results = _roundtrip(
             {
-                "jsonrpc": "2.0", "method": "initialize",
-                "params": {"protocolVersion": "2024-11-05", "capabilities": {}}, "id": 1,
+                "jsonrpc": "2.0",
+                "method": "initialize",
+                "params": {"protocolVersion": "2024-11-05", "capabilities": {}},
+                "id": 1,
             },
             {
-                "jsonrpc": "2.0", "method": "tools/call",
-                "params": {"name": "gmail_get_profile", "arguments": {}}, "id": 3,
+                "jsonrpc": "2.0",
+                "method": "tools/call",
+                "params": {"name": "gmail_get_profile", "arguments": {}},
+                "id": 3,
             },
         )
         tool_resp = results[1]
         assert "test@gmail.com" in tool_resp["result"]["content"][0]["text"]
 
     def test_unknown_method_returns_error(self) -> None:
-        results = _roundtrip(
-            {"jsonrpc": "2.0", "method": "fake/method", "id": 4}
-        )
+        results = _roundtrip({"jsonrpc": "2.0", "method": "fake/method", "id": 4})
         assert results[0]["error"]["code"] == -32601
