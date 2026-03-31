@@ -23,6 +23,8 @@ class Config:
         self.accounts_path: str = os.getenv("ACCOUNTS_PATH", "accounts.json")
         self.mcp_auth_token: str | None = os.getenv("MCP_AUTH_TOKEN")
         self.http_port: int = int(os.getenv("HTTP_PORT", "8420"))
+        self.ssl_cert_path: str | None = os.getenv("SSL_CERT_PATH")
+        self.ssl_key_path: str | None = os.getenv("SSL_KEY_PATH")
 
     def load_accounts(self) -> list[dict[str, Any]]:
         path = Path(self.accounts_path)

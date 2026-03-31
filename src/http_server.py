@@ -101,6 +101,13 @@ def create_app(cfg: Config) -> Starlette:
 def run_http_server(cfg: Config, port: int = 8420) -> None:
     if not cfg.mcp_auth_token:
         logger.warning("MCP_AUTH_TOKEN not set - HTTP server running without auth!")
-    logger.info(f"Starting HTTP server on port {port}")
     app = create_app(cfg)
-    uvicorn.run(app, host="0.0.0.0", port=port)
+
+    ssl_cert = cfg.ssl_cert_path
+    ssl_key = cfg.ssl_key_path
+    if ssl_cert and ssl_key:
+        logger.info(f"Starting HTTPS server on port {port}")
+        uvicorn.run(app, host="0.0.0.0", port=port, ssl_certfile=ssl_cert, ssl_keyfile=ssl_key)
+    else:
+        logger.info(f"Starting HTTP server on port {port}")
+        uvicorn.run(app, host="0.0.0.0", port=port)
