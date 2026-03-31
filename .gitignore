@@ -13,3 +13,4 @@ htmlcov/
 mcp_server.log
 .gstack/
 accounts.json
+.cloudflared/
