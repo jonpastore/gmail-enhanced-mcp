@@ -32,9 +32,12 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         if request.url.path in self._exempt:
             return await call_next(request)
         auth = request.headers.get("authorization", "")
-        if not auth.startswith("Bearer ") or auth[7:] != self._token:
-            return JSONResponse({"error": "Unauthorized"}, status_code=401)
-        return await call_next(request)
+        query_token = request.query_params.get("token", "")
+        if auth.startswith("Bearer ") and auth[7:] == self._token:
+            return await call_next(request)
+        if query_token == self._token:
+            return await call_next(request)
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
 
 def create_mcp_server(tool_registry: ToolRegistry) -> Server:
