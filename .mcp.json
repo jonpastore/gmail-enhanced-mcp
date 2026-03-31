@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "gmail-enhanced": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "gmail_mcp"],
+      "cwd": "/home/jon/projects/gmail-enhanced-mcp"
+    }
+  }
+}
