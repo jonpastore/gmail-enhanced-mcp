@@ -11,6 +11,7 @@ from src.gmail_client import GmailClient
 def _make_client(mock_service: MagicMock | None = None) -> GmailClient:
     client = GmailClient.__new__(GmailClient)
     client._service = mock_service or MagicMock()
+    client._account_email = "test@gmail.com"
     return client
 
 

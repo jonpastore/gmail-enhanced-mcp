@@ -11,3 +11,4 @@ build/
 .coverage
 htmlcov/
 mcp_server.log
+.gstack/

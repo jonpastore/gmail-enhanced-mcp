@@ -10,7 +10,12 @@ from src.server import StdioServer
 
 
 def _roundtrip(*requests: dict[str, Any]) -> list[dict[str, Any]]:
-    with patch("src.config.Config"), patch("src.gmail_client.GmailClient") as mock_cls:
+    with (
+        patch("src.config.Config"),
+        patch("src.auth.TokenManager"),
+        patch("src.gmail_client.GmailClient") as mock_cls,
+        patch("src.account_registry.AccountRegistry") as mock_reg_cls,
+    ):
         mock_client = MagicMock()
         mock_client.get_profile.return_value = {
             "emailAddress": "test@gmail.com",
@@ -22,6 +27,12 @@ def _roundtrip(*requests: dict[str, Any]) -> list[dict[str, Any]]:
             "resultSizeEstimate": 1,
         }
         mock_cls.return_value = mock_client
+        mock_reg = MagicMock()
+        mock_reg.get.return_value = mock_client
+        mock_reg.list_accounts.return_value = [
+            {"email": "test@gmail.com", "provider": "gmail", "default": True},
+        ]
+        mock_reg_cls.return_value = mock_reg
 
         handler = ProtocolHandler()
         server = StdioServer()
@@ -46,9 +57,9 @@ class TestStdioRoundtrip:
         )
         assert results[0]["result"]["serverInfo"]["name"] == "gmail-enhanced-mcp"
 
-    def test_tools_list_returns_14_tools(self) -> None:
+    def test_tools_list_returns_15_tools(self) -> None:
         results = _roundtrip({"jsonrpc": "2.0", "method": "tools/list", "params": {}, "id": 2})
-        assert len(results[0]["result"]["tools"]) == 14
+        assert len(results[0]["result"]["tools"]) == 15
 
     def test_tool_call_get_profile(self) -> None:
         results = _roundtrip(

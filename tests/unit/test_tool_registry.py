@@ -4,14 +4,23 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.account_registry import AccountRegistry
 from src.models import ToolCallParams
 from src.tools import ToolRegistry
 
 
+def _make_registry() -> ToolRegistry:
+    mock_client = MagicMock()
+    mock_client.email_address = "test@gmail.com"
+    mock_client.provider = "gmail"
+    reg = AccountRegistry()
+    reg.register("test@gmail.com", mock_client)
+    return ToolRegistry(account_registry=reg)
+
+
 class TestToolRegistryIntegration:
-    def test_all_14_tools_registered(self) -> None:
-        mock_client = MagicMock()
-        registry = ToolRegistry(gmail_client=mock_client)
+    def test_all_15_tools_registered(self) -> None:
+        registry = _make_registry()
         tools = registry.list_tools()
         tool_names = {t["name"] for t in tools}
         expected = {
@@ -29,18 +38,17 @@ class TestToolRegistryIntegration:
             "gmail_modify_thread_labels",
             "gmail_save_template",
             "gmail_use_template",
+            "gmail_list_accounts",
         }
         assert tool_names == expected
 
     def test_all_tools_have_input_schema(self) -> None:
-        mock_client = MagicMock()
-        registry = ToolRegistry(gmail_client=mock_client)
+        registry = _make_registry()
         for tool in registry.list_tools():
             assert "inputSchema" in tool, f"{tool['name']} missing inputSchema"
             assert tool["inputSchema"]["type"] == "object"
 
     def test_execute_unknown_tool_raises(self) -> None:
-        mock_client = MagicMock()
-        registry = ToolRegistry(gmail_client=mock_client)
+        registry = _make_registry()
         with pytest.raises(ValueError, match="Unknown tool"):
             registry.execute_tool(ToolCallParams(name="fake_tool"))

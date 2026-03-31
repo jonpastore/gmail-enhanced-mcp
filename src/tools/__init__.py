@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+import json
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -16,6 +17,16 @@ from .search import (
 )
 from .send import handle_send_email
 from .templates import handle_save_template, handle_use_template
+
+if TYPE_CHECKING:
+    from ..account_registry import AccountRegistry
+
+_ACCOUNT_PROP = {
+    "account": {
+        "type": "string",
+        "description": "Account email (e.g. jon@degenito.ai). Omit for default.",
+    }
+}
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
@@ -254,7 +265,16 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["name", "variables"],
         },
     },
+    {
+        "name": "gmail_list_accounts",
+        "description": "List all registered email accounts.",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
 ]
+
+for _tool in TOOL_DEFINITIONS:
+    if _tool["name"] != "gmail_list_accounts":
+        _tool["inputSchema"]["properties"].update(_ACCOUNT_PROP)
 
 _HANDLER_MAP: dict[str, Any] = {
     "gmail_get_profile": handle_get_profile,
@@ -275,8 +295,8 @@ _HANDLER_MAP: dict[str, Any] = {
 
 
 class ToolRegistry:
-    def __init__(self, gmail_client: Any = None) -> None:
-        self._client = gmail_client
+    def __init__(self, account_registry: AccountRegistry | None = None) -> None:
+        self._registry = account_registry
         self._tools = {t["name"]: t for t in TOOL_DEFINITIONS}
         self._handlers = dict(_HANDLER_MAP)
 
@@ -284,8 +304,21 @@ class ToolRegistry:
         return list(self._tools.values())
 
     def execute_tool(self, params: ToolCallParams) -> dict[str, Any]:
+        if params.name == "gmail_list_accounts":
+            return self._handle_list_accounts()
         handler = self._handlers.get(params.name)
         if handler is None:
             raise ValueError(f"Unknown tool: {params.name}")
         logger.info(f"Executing tool: {params.name}")
-        return handler(params.arguments, self._client)  # type: ignore[no-any-return]
+        args = dict(params.arguments)
+        account = args.pop("account", None)
+        client = self._registry.get(account) if self._registry else None
+        return handler(args, client)  # type: ignore[no-any-return]
+
+    def _handle_list_accounts(self) -> dict[str, Any]:
+        if self._registry is None:
+            accounts: list[dict[str, Any]] = []
+        else:
+            accounts = self._registry.list_accounts()
+        text = json.dumps(accounts, indent=2)
+        return {"content": [{"type": "text", "text": text}]}
