@@ -46,10 +46,14 @@ class TestConfig:
 
     def test_load_accounts_from_file(self, tmp_path: Path) -> None:
         accts_file = tmp_path / "accounts.json"
-        accts_file.write_text(json.dumps({
-            "default": "a@test.com",
-            "accounts": [{"email": "a@test.com", "provider": "gmail"}],
-        }))
+        accts_file.write_text(
+            json.dumps(
+                {
+                    "default": "a@test.com",
+                    "accounts": [{"email": "a@test.com", "provider": "gmail"}],
+                }
+            )
+        )
         with patch.dict(os.environ, {}, clear=True):
             cfg = Config()
             cfg.accounts_path = str(accts_file)
@@ -59,10 +63,14 @@ class TestConfig:
 
     def test_get_default_account(self, tmp_path: Path) -> None:
         accts_file = tmp_path / "accounts.json"
-        accts_file.write_text(json.dumps({
-            "default": "a@test.com",
-            "accounts": [{"email": "a@test.com", "provider": "gmail"}],
-        }))
+        accts_file.write_text(
+            json.dumps(
+                {
+                    "default": "a@test.com",
+                    "accounts": [{"email": "a@test.com", "provider": "gmail"}],
+                }
+            )
+        )
         with patch.dict(os.environ, {}, clear=True):
             cfg = Config()
             cfg.accounts_path = str(accts_file)

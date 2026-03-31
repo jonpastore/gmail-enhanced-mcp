@@ -31,10 +31,12 @@ class TestMultiAccountRouting:
         reg.register("personal@gmail.com", gmail)
         reg.register("work@company.com", outlook)
         registry = ToolRegistry(account_registry=reg)
-        registry.execute_tool(ToolCallParams(
-            name="gmail_get_profile",
-            arguments={"account": "work@company.com"},
-        ))
+        registry.execute_tool(
+            ToolCallParams(
+                name="gmail_get_profile",
+                arguments={"account": "work@company.com"},
+            )
+        )
         outlook.get_profile.assert_called_once()
         gmail.get_profile.assert_not_called()
 
@@ -43,9 +45,12 @@ class TestMultiAccountRouting:
         reg.register("a@gmail.com", _mock_client("a@gmail.com", "gmail"))
         reg.register("b@outlook.com", _mock_client("b@outlook.com", "outlook"))
         registry = ToolRegistry(account_registry=reg)
-        result = registry.execute_tool(ToolCallParams(
-            name="gmail_list_accounts", arguments={},
-        ))
+        result = registry.execute_tool(
+            ToolCallParams(
+                name="gmail_list_accounts",
+                arguments={},
+            )
+        )
         text = result["content"][0]["text"]
         assert "a@gmail.com" in text
         assert "b@outlook.com" in text

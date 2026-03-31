@@ -3,29 +3,29 @@ from __future__ import annotations
 import base64
 import mimetypes
 from email.mime.application import MIMEApplication
-from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
-from email.mime.image import MIMEImage
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from pathlib import Path
 from typing import Any
 
-import requests
 from googleapiclient.discovery import build
 from loguru import logger
 
 from .auth import TokenManager
-from .config import Config
-
-BLOCKED_EXTENSIONS = {".exe", ".bat", ".cmd", ".scr", ".js", ".vbs", ".msi"}
-MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024
+from .email_client import EmailClient
 
 
-class GmailClient:
-    def __init__(self, config: Config) -> None:
-        self._token_mgr = TokenManager(config.client_secret_path, config.token_path)
+class GmailClient(EmailClient):
+    def __init__(self, token_manager: TokenManager, account_email: str) -> None:
+        self._token_mgr = token_manager
+        self._account_email = account_email
         self._service: Any = None
+
+    @property
+    def email_address(self) -> str:
+        return self._account_email
+
+    @property
+    def provider(self) -> str:
+        return "gmail"
 
     def _get_service(self) -> Any:
         if self._service is None:
@@ -79,6 +79,8 @@ class GmailClient:
             .execute()
         )
         data = base64.urlsafe_b64decode(att["data"])
+        from pathlib import Path
+
         path = Path(save_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
@@ -115,78 +117,11 @@ class GmailClient:
             "nextPageToken": result.get("nextPageToken"),
         }
 
-    def build_mime_message(
-        self,
-        to: str | None = None,
-        subject: str | None = None,
-        body: str = "",
-        content_type: str = "text/plain",
-        cc: str | None = None,
-        bcc: str | None = None,
-        thread_id: str | None = None,
-        attachments: list[dict[str, Any]] | None = None,
-    ) -> MIMEBase:
-        msg: MIMEBase
-        if attachments:
-            multi = MIMEMultipart("mixed")
-            text_part = MIMEText(body, "html" if content_type == "text/html" else "plain")
-            multi.attach(text_part)
-            for att in attachments:
-                att_part = self._resolve_attachment(att)
-                multi.attach(att_part)
-            msg = multi
-        else:
-            subtype = "html" if content_type == "text/html" else "plain"
-            msg = MIMEText(body, subtype)
-
-        if to:
-            msg["To"] = to
-        if subject:
-            msg["Subject"] = subject
-        if cc:
-            msg["Cc"] = cc
-        if bcc:
-            msg["Bcc"] = bcc
-        return msg
-
-    def _resolve_attachment(self, att: dict[str, Any]) -> MIMEBase:
-        att_type = att["type"]
-        if att_type == "file":
-            return self._resolve_file_attachment(att["path"])
-        elif att_type == "gmail":
+    def _resolve_provider_attachment(self, att: dict[str, Any]) -> MIMEBase:
+        att_type = att.get("type")
+        if att_type == "gmail":
             return self._resolve_gmail_attachment(att["message_id"], att["attachment_id"])
-        elif att_type == "url":
-            return self._resolve_url_attachment(att["url"], att["filename"])
-        else:
-            raise ValueError(f"Unknown attachment type: {att_type}")
-
-    def _resolve_file_attachment(self, file_path: str) -> MIMEBase:
-        path = Path(file_path)
-        if not path.exists():
-            raise FileNotFoundError(f"Attachment path does not exist: {file_path}")
-        if path.suffix.lower() in BLOCKED_EXTENSIONS:
-            raise ValueError(f"Blocked attachment type: {path.suffix}")
-        data = path.read_bytes()
-        if len(data) > MAX_ATTACHMENT_SIZE:
-            size_mb = len(data) / (1024 * 1024)
-            raise ValueError(f"Attachment exceeds 25MB limit: {path.name} ({size_mb:.1f}MB)")
-        mime_type, _ = mimetypes.guess_type(str(path))
-        mime_type = mime_type or "application/octet-stream"
-        maintype, subtype = mime_type.split("/", 1)
-
-        part: MIMEBase
-        if maintype == "image":
-            part = MIMEImage(data, _subtype=subtype)
-        elif maintype == "audio":
-            part = MIMEAudio(data, _subtype=subtype)
-        elif maintype == "application":
-            part = MIMEApplication(data, _subtype=subtype)
-        else:
-            part = MIMEBase(maintype, subtype)
-            part.set_payload(data)
-
-        part.add_header("Content-Disposition", "attachment", filename=path.name)
-        return part
+        raise ValueError(f"Unknown attachment type: {att_type}")
 
     def _resolve_gmail_attachment(self, message_id: str, attachment_id: str) -> MIMEBase:
         svc = self._get_service()
@@ -213,21 +148,6 @@ class GmailClient:
             if body.get("attachmentId") == attachment_id:
                 return part.get("filename")  # type: ignore[no-any-return]
         return None
-
-    def _resolve_url_attachment(self, url: str, filename: str) -> MIMEBase:
-        resp = requests.get(url, timeout=30)
-        resp.raise_for_status()
-        data = resp.content
-        if len(data) > MAX_ATTACHMENT_SIZE:
-            size_mb = len(data) / (1024 * 1024)
-            raise ValueError(f"URL attachment exceeds 25MB limit: {filename} ({size_mb:.1f}MB)")
-        content_type = resp.headers.get("Content-Type", "application/octet-stream")
-        subtype = (
-            content_type.split("/")[1].split(";")[0] if "/" in content_type else "octet-stream"
-        )
-        part = MIMEApplication(data, _subtype=subtype)
-        part.add_header("Content-Disposition", "attachment", filename=filename)
-        return part
 
     def _encode_message(self, mime_msg: MIMEBase) -> str:
         return base64.urlsafe_b64encode(mime_msg.as_bytes()).decode("ascii")

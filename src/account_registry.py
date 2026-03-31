@@ -58,9 +58,11 @@ class AccountRegistry:
     def list_accounts(self) -> list[dict[str, Any]]:
         result = []
         for email, client in self._accounts.items():
-            result.append({
-                "email": email,
-                "provider": client.provider,
-                "default": email == self._default,
-            })
+            result.append(
+                {
+                    "email": email,
+                    "provider": client.provider,
+                    "default": email == self._default,
+                }
+            )
         return result
