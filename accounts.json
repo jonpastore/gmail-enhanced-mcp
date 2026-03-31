@@ -1,0 +1,17 @@
+{
+  "default": "jpastore79@gmail.com",
+  "accounts": [
+    {
+      "email": "jpastore79@gmail.com",
+      "provider": "gmail"
+    },
+    {
+      "email": "jon@degenito.ai",
+      "provider": "outlook",
+      "azure": {
+        "client_id": "",
+        "tenant_id": ""
+      }
+    }
+  ]
+}
