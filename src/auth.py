@@ -138,15 +138,20 @@ def run_auth_flow(cfg: Config, provider: str = "gmail") -> None:
         print("Authentication successful! Token saved.")
 
     elif provider == "outlook":
-        accounts_path = Path(cfg.client_secret_path).parent / "accounts.json"
+        accounts_path = Path(cfg.accounts_path)
+        client_id = ""
+        tenant_id = ""
+        account_email = ""
+
         if accounts_path.exists():
             accounts_data = json.loads(accounts_path.read_text())
-            outlook_cfg = accounts_data.get("outlook", {})
-            client_id = outlook_cfg.get("client_id", "")
-            tenant_id = outlook_cfg.get("tenant_id", "")
-        else:
-            client_id = ""
-            tenant_id = ""
+            for acc in accounts_data.get("accounts", []):
+                if acc.get("provider") == "outlook":
+                    azure = acc.get("azure", {})
+                    client_id = azure.get("client_id", "")
+                    tenant_id = azure.get("tenant_id", "")
+                    account_email = acc.get("email", "")
+                    break
 
         if not client_id:
             client_id = input("Microsoft Application (client) ID: ").strip()
@@ -157,10 +162,11 @@ def run_auth_flow(cfg: Config, provider: str = "gmail") -> None:
             print("ERROR: client_id and tenant_id are required.")
             return
 
-        token_path = str(Path(cfg.token_path).parent / "ms_token_cache.json")
+        token_dir = f"credentials/{account_email}" if account_email else "credentials"
+        token_path = str(Path(token_dir) / "token.json")
         ms_mgr = MicrosoftTokenManager(client_id, tenant_id, token_path)
         ms_mgr.run_interactive_auth()
-        print("Microsoft authentication successful! Token cached.")
+        print(f"Microsoft authentication successful! Token saved to {token_path}")
 
     else:
         print(f"ERROR: Unknown provider '{provider}'. Use 'gmail' or 'outlook'.")
