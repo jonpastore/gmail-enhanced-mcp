@@ -9,8 +9,8 @@
       "email": "jon@degenito.ai",
       "provider": "outlook",
       "azure": {
-        "client_id": "",
-        "tenant_id": ""
+        "client_id": "YOUR_CLIENT_ID",
+        "tenant_id": "YOUR_TENANT_ID"
       }
     }
   ]
