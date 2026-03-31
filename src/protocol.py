@@ -17,15 +17,11 @@ from .tools import ToolRegistry
 class ProtocolHandler:
     def __init__(self) -> None:
         from .account_registry import AccountRegistry
-        from .auth import TokenManager
         from .config import Config
-        from .gmail_client import GmailClient
 
         cfg = Config()
         registry = AccountRegistry()
-        tmgr = TokenManager(cfg.client_secret_path, cfg.token_path)
-        client = GmailClient(tmgr, "default")
-        registry.register("default", client)
+        registry.load_from_config(cfg)
         self.tool_registry = ToolRegistry(account_registry=registry)
         self.initialized = False
 
