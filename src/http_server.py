@@ -6,6 +6,9 @@ from typing import Any
 
 import uvicorn
 from loguru import logger
+from mcp.server import Server
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.types import TextContent, Tool
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -13,14 +16,10 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
-from mcp.server import Server
-from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import TextContent, Tool
-
 from .account_registry import AccountRegistry
 from .config import Config
 from .models import ToolCallParams
-from .tools import TOOL_DEFINITIONS, ToolRegistry
+from .tools import ToolRegistry
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):

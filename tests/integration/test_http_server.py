@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 class TestHealthEndpoint:
     def test_health_returns_ok(self) -> None:
@@ -12,8 +10,9 @@ class TestHealthEndpoint:
             mock_reg.load_from_config = MagicMock()
             mock_reg_cls.return_value = mock_reg
 
-            from src.http_server import create_app
             from starlette.testclient import TestClient
+
+            from src.http_server import create_app
 
             cfg = MagicMock()
             cfg.mcp_auth_token = None
@@ -32,8 +31,9 @@ class TestBearerAuth:
             mock_reg.load_from_config = MagicMock()
             mock_reg_cls.return_value = mock_reg
 
-            from src.http_server import create_app
             from starlette.testclient import TestClient
+
+            from src.http_server import create_app
 
             cfg = MagicMock()
             cfg.mcp_auth_token = "secret123"
@@ -49,8 +49,9 @@ class TestBearerAuth:
             mock_reg.load_from_config = MagicMock()
             mock_reg_cls.return_value = mock_reg
 
-            from src.http_server import create_app
             from starlette.testclient import TestClient
+
+            from src.http_server import create_app
 
             cfg = MagicMock()
             cfg.mcp_auth_token = "secret123"
@@ -69,8 +70,9 @@ class TestBearerAuth:
             mock_reg.load_from_config = MagicMock()
             mock_reg_cls.return_value = mock_reg
 
-            from src.http_server import create_app
             from starlette.testclient import TestClient
+
+            from src.http_server import create_app
 
             cfg = MagicMock()
             cfg.mcp_auth_token = "secret123"
