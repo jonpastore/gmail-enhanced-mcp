@@ -119,9 +119,11 @@ def create_app(cfg: Config) -> Starlette:
             import time
             time.sleep(1)
             env = os.environ.copy()
+            project_dir = str(Path(__file__).parent.parent)
             subprocess.Popen(
                 [sys.executable] + sys.argv,
                 env=env,
+                cwd=project_dir,
                 start_new_session=True,
             )
             time.sleep(1)
