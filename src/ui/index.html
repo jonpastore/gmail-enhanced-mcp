@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gmail Enhanced — Email Hygiene</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+    <!-- Auth Screen (shown if no token) -->
+    <div id="auth-screen" class="auth-screen" style="display:none;">
+        <h1>Gmail Enhanced MCP</h1>
+        <p style="color:var(--text-muted);">Enter your MCP auth token</p>
+        <input id="token-input" type="password" placeholder="MCP_AUTH_TOKEN">
+        <button class="primary" onclick="App.authenticate()">Connect</button>
+    </div>
+
+    <!-- Main App (shown after auth) -->
+    <div id="main" style="display:none;">
+        <div class="header">
+            <h1>Gmail Enhanced — Email Hygiene</h1>
+            <div class="tabs">
+                <div class="tab active" data-tab="inbox" onclick="App.switchTab('inbox')">Inbox Review</div>
+                <div class="tab" data-tab="priority" onclick="App.switchTab('priority')">Priority Senders</div>
+                <div class="tab" data-tab="newsletters" onclick="App.switchTab('newsletters')">Newsletters</div>
+            </div>
+        </div>
+
+        <!-- Inbox Review Tab -->
+        <div id="tab-inbox" class="tab-content">
+            <div class="account-bar" id="account-bar"></div>
+            <div class="filter-bar" id="filter-bar"></div>
+            <div class="sort-bar">
+                <label><input type="checkbox" id="select-all" onchange="Inbox.toggleSelectAll()"> Select all</label>
+                <div class="sort-options">
+                    <span class="active" onclick="Inbox.sort('score')">Priority Score</span>
+                    <span onclick="Inbox.sort('date')">Date</span>
+                    <span onclick="Inbox.sort('sender')">Sender</span>
+                </div>
+            </div>
+            <div id="bulk-bar" class="bulk-bar" style="display:none;">
+                <span class="count" id="selected-count">0 selected</span>
+                <button class="bulk-btn" onclick="Inbox.bulkMoveTo()">Move to...</button>
+                <button class="bulk-btn" onclick="Inbox.bulkTrash()">Trash</button>
+                <button class="bulk-btn" onclick="Inbox.bulkSpam()">Spam</button>
+                <button class="bulk-btn" onclick="Inbox.bulkBlock()">Block Senders</button>
+                <button class="bulk-btn priority" onclick="Inbox.bulkPriority()">+ Priority</button>
+            </div>
+            <div id="message-list"></div>
+            <div class="pagination" id="pagination"></div>
+        </div>
+
+        <!-- Priority Senders Tab -->
+        <div id="tab-priority" class="tab-content" style="display:none;">
+            <div class="add-form">
+                <input id="ps-pattern" placeholder="Email or *@domain.com">
+                <select id="ps-tier">
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="normal" selected>Normal</option>
+                </select>
+                <input id="ps-label" placeholder="Label (e.g. Family)">
+                <button class="primary" onclick="Priority.addSender()">Add</button>
+            </div>
+            <div style="display:flex; gap:8px; padding:12px 0;">
+                <button onclick="Priority.importContacts()">Import Contacts</button>
+                <button onclick="Priority.resyncContacts()">Resync Contacts</button>
+            </div>
+            <div class="search-bar">
+                <input id="ps-search" placeholder="Search senders..." oninput="Priority.filter()">
+            </div>
+            <div id="priority-list"></div>
+        </div>
+
+        <!-- Newsletters Tab -->
+        <div id="tab-newsletters" class="tab-content" style="display:none;">
+            <div style="padding:12px 0; display:flex; gap:8px;">
+                <button class="primary" onclick="Newsletters.scan()">Scan Inbox</button>
+                <button onclick="Newsletters.bulkTrash()">Trash Selected</button>
+                <button onclick="Newsletters.bulkBlock()">Block Selected</button>
+            </div>
+            <div id="newsletter-list"></div>
+        </div>
+    </div>
+
+    <!-- Label Dropdown (reusable, positioned dynamically) -->
+    <div id="label-dropdown" class="label-menu" style="display:none;"></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

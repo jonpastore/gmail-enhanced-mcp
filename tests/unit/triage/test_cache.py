@@ -525,6 +525,33 @@ class TestRowCount:
         assert cache.row_count("message_cache") == 5
 
 
+class TestDismissedContacts:
+    def test_dismiss_contact_stores_pattern(self, cache: TriageCache) -> None:
+        cache.dismiss_contact("spam@example.com")
+        dismissed = cache.get_dismissed_contacts()
+        assert len(dismissed) == 1
+        assert dismissed[0]["email_pattern"] == "spam@example.com"
+        assert "dismissed_at" in dismissed[0]
+
+    def test_dismiss_duplicate_is_idempotent(self, cache: TriageCache) -> None:
+        cache.dismiss_contact("spam@example.com")
+        cache.dismiss_contact("spam@example.com")
+        dismissed = cache.get_dismissed_contacts()
+        assert len(dismissed) == 1
+
+    def test_is_dismissed_returns_true(self, cache: TriageCache) -> None:
+        cache.dismiss_contact("spam@example.com")
+        assert cache.is_dismissed("spam@example.com") is True
+
+    def test_is_dismissed_returns_false(self, cache: TriageCache) -> None:
+        assert cache.is_dismissed("good@example.com") is False
+
+    def test_undismiss_contact(self, cache: TriageCache) -> None:
+        cache.dismiss_contact("spam@example.com")
+        cache.undismiss_contact("spam@example.com")
+        assert cache.is_dismissed("spam@example.com") is False
+
+
 class TestThreadSafety:
     def test_concurrent_writes(self, cache: TriageCache) -> None:
         errors: list[Exception] = []

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 import uvicorn
@@ -15,6 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
 
 from .account_registry import AccountRegistry
 from .config import Config
@@ -88,10 +90,13 @@ def create_app(cfg: Config) -> Starlette:
             Middleware(BearerAuthMiddleware, token=cfg.mcp_auth_token, exempt_paths={"/health"})
         )
 
+    ui_dir = Path(__file__).parent / "ui"
+
     return Starlette(
         routes=[
             Route("/health", health),
             Mount("/mcp", app=session_manager.handle_request),
+            Mount("/ui", app=StaticFiles(directory=str(ui_dir), html=True), name="ui"),
         ],
         lifespan=lifespan,
         middleware=middleware,

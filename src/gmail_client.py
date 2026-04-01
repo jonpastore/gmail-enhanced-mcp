@@ -491,3 +491,22 @@ class GmailClient(EmailClient):
             elif link.startswith("mailto:"):
                 mailto = link
         return {"found": True, "unsubscribe_url": url, "unsubscribe_mailto": mailto}
+
+    def create_label(self, name: str) -> dict[str, Any]:
+        """Create a new Gmail label.
+
+        Args:
+            name: Label name to create.
+
+        Returns:
+            Dict with id and name of the created label.
+        """
+        svc = self._get_service()
+        label_body = {
+            "name": name,
+            "labelListVisibility": "labelShow",
+            "messageListVisibility": "show",
+        }
+        result = svc.users().labels().create(userId="me", body=label_body).execute()
+        logger.info(f"Created label: {result.get('name')} ({result.get('id')})")
+        return {"id": result["id"], "name": result["name"]}

@@ -487,3 +487,16 @@ class TestExtractUnsubscribeLink:
         client = _make_client(mock_svc)
         result = client.extract_unsubscribe_link("msg_001")
         assert result["found"] is False
+
+
+class TestCreateLabel:
+    def test_creates_label_and_returns_id(self) -> None:
+        mock_svc = MagicMock()
+        mock_svc.users().labels().create().execute.return_value = {
+            "id": "Label_99",
+            "name": "My New Label",
+        }
+        client = _make_client(mock_svc)
+        result = client.create_label("My New Label")
+        assert result["id"] == "Label_99"
+        assert result["name"] == "My New Label"

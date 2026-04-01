@@ -159,3 +159,51 @@ def handle_get_unsubscribe_link(
     if result["unsubscribe_mailto"]:
         lines.append(f"  Email: {result['unsubscribe_mailto']}")
     return _text_content("\n".join(lines))
+
+
+def handle_create_label(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+    """Create a new Gmail label."""
+    guard = _gmail_only(client)
+    if guard:
+        return guard
+
+    name = args.get("name")
+    if not name:
+        return _text_content("name is required.")
+
+    result = client.create_label(name)  # type: ignore[attr-defined]
+    return _text_content(f"Created label: {result['name']} (ID: {result['id']})")
+
+
+def handle_dismiss_contact(
+    args: dict[str, Any], client: EmailClient, cache: TriageCache
+) -> dict[str, Any]:
+    """Dismiss a contact pattern from future resync."""
+    guard = _gmail_only(client)
+    if guard:
+        return guard
+
+    pattern = args.get("pattern")
+    if not pattern:
+        return _text_content("pattern is required.")
+
+    cache.dismiss_contact(pattern)
+    return _text_content(f"Dismissed {pattern}. It will not be re-added on resync.")
+
+
+def handle_list_dismissed_contacts(
+    args: dict[str, Any], client: EmailClient, cache: TriageCache
+) -> dict[str, Any]:
+    """List dismissed contact patterns."""
+    guard = _gmail_only(client)
+    if guard:
+        return guard
+
+    dismissed = cache.get_dismissed_contacts()
+    if not dismissed:
+        return _text_content("No dismissed contacts.")
+
+    lines = [f"Dismissed contacts ({len(dismissed)}):"]
+    for d in dismissed:
+        lines.append(f"  {d['email_pattern']} (dismissed: {d['dismissed_at'][:10]})")
+    return _text_content("\n".join(lines))

@@ -86,6 +86,11 @@ CREATE INDEX IF NOT EXISTS idx_cache_thread ON message_cache(thread_id);
 CREATE INDEX IF NOT EXISTS idx_followup_status ON follow_ups(status);
 CREATE INDEX IF NOT EXISTS idx_followup_account ON follow_ups(account_hash);
 CREATE INDEX IF NOT EXISTS idx_scores_scored_at ON importance_scores(scored_at);
+
+CREATE TABLE IF NOT EXISTS dismissed_contacts (
+    email_pattern TEXT PRIMARY KEY,
+    dismissed_at TEXT NOT NULL
+);
 """
 
 
@@ -340,6 +345,42 @@ class TriageCache:
             ),
         )
 
+    # -- Dismissed contacts --
+
+    def dismiss_contact(self, email_pattern: str) -> None:
+        """Add a contact pattern to the dismissed list."""
+        now = datetime.now(tz=UTC).isoformat()
+        self._execute_write(
+            "INSERT OR IGNORE INTO dismissed_contacts (email_pattern, dismissed_at) VALUES (?, ?)",
+            (email_pattern, now),
+        )
+
+    def undismiss_contact(self, email_pattern: str) -> None:
+        """Remove a contact pattern from the dismissed list."""
+        self._execute_write(
+            "DELETE FROM dismissed_contacts WHERE email_pattern = ?",
+            (email_pattern,),
+        )
+
+    def is_dismissed(self, email_pattern: str) -> bool:
+        """Check if a contact pattern is dismissed."""
+        rows = self._execute_read(
+            "SELECT 1 FROM dismissed_contacts WHERE email_pattern = ?",
+            (email_pattern,),
+        )
+        return len(rows) > 0
+
+    def get_dismissed_contacts(self) -> list[dict[str, str]]:
+        """List all dismissed contact patterns.
+
+        Returns:
+            List of dicts with email_pattern and dismissed_at keys.
+        """
+        rows = self._execute_read(
+            "SELECT email_pattern, dismissed_at FROM dismissed_contacts ORDER BY dismissed_at DESC"
+        )
+        return [{"email_pattern": r["email_pattern"], "dismissed_at": r["dismissed_at"]} for r in rows]
+
     # -- Maintenance --
 
     def evict_expired(self) -> int:
@@ -363,6 +404,7 @@ class TriageCache:
                 DROP TABLE IF EXISTS follow_ups;
                 DROP TABLE IF EXISTS priority_senders;
                 DROP TABLE IF EXISTS sync_state;
+                DROP TABLE IF EXISTS dismissed_contacts;
                 DROP TABLE IF EXISTS message_cache;
                 """
             )
@@ -377,6 +419,7 @@ class TriageCache:
             "follow_ups",
             "priority_senders",
             "sync_state",
+            "dismissed_contacts",
         }
         if table not in allowed:
             raise ValueError(f"Unknown table: {table}")

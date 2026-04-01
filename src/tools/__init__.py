@@ -19,9 +19,12 @@ from .search import (
 )
 from .hygiene import (
     handle_block_sender,
+    handle_create_label,
+    handle_dismiss_contact,
     handle_get_unsubscribe_link,
     handle_import_contacts_as_priority,
     handle_list_contacts,
+    handle_list_dismissed_contacts,
     handle_report_spam,
     handle_trash_messages,
 )
@@ -497,6 +500,43 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["messageId"],
         },
     },
+    {
+        "name": "gmail_create_label",
+        "description": "Create a new Gmail label.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Label name to create",
+                },
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "gmail_dismiss_contact",
+        "description": "Dismiss a contact pattern so resync won't re-add it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Email pattern to dismiss",
+                },
+            },
+            "required": ["pattern"],
+        },
+    },
+    {
+        "name": "gmail_list_dismissed_contacts",
+        "description": "List all dismissed contact patterns.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
 ]
 
 for _tool in TOOL_DEFINITIONS:
@@ -523,6 +563,7 @@ _HANDLER_MAP: dict[str, Any] = {
     "gmail_report_spam": handle_report_spam,
     "gmail_list_contacts": handle_list_contacts,
     "gmail_get_unsubscribe_link": handle_get_unsubscribe_link,
+    "gmail_create_label": handle_create_label,
 }
 
 _TRIAGE_HANDLER_MAP: dict[str, Any] = {
@@ -534,6 +575,8 @@ _TRIAGE_HANDLER_MAP: dict[str, Any] = {
     "gmail_check_followups": handle_check_followups,
     "gmail_reset_triage_cache": handle_reset_triage_cache,
     "gmail_import_contacts_as_priority": handle_import_contacts_as_priority,
+    "gmail_dismiss_contact": handle_dismiss_contact,
+    "gmail_list_dismissed_contacts": handle_list_dismissed_contacts,
 }
 
 

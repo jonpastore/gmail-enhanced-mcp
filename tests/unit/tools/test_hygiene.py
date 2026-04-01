@@ -5,9 +5,12 @@ from unittest.mock import MagicMock
 
 from src.tools.hygiene import (
     handle_block_sender,
+    handle_create_label,
+    handle_dismiss_contact,
     handle_get_unsubscribe_link,
     handle_import_contacts_as_priority,
     handle_list_contacts,
+    handle_list_dismissed_contacts,
     handle_report_spam,
     handle_trash_messages,
 )
@@ -171,3 +174,59 @@ class TestHandleGetUnsubscribeLink:
         client = _gmail_client()
         result = handle_get_unsubscribe_link({}, client)
         assert "messageId is required" in result["content"][0]["text"]
+
+
+class TestHandleCreateLabel:
+    def test_creates_label(self) -> None:
+        client = _gmail_client()
+        client.create_label.return_value = {"id": "Label_99", "name": "Test Label"}
+        result = handle_create_label({"name": "Test Label"}, client)
+        assert "Label_99" in result["content"][0]["text"]
+
+    def test_requires_name(self) -> None:
+        client = _gmail_client()
+        result = handle_create_label({}, client)
+        assert "name is required" in result["content"][0]["text"]
+
+    def test_rejects_outlook(self) -> None:
+        client = _outlook_client()
+        result = handle_create_label({"name": "Test"}, client)
+        assert "only available for Gmail" in result["content"][0]["text"]
+
+
+class TestHandleDismissContact:
+    def test_dismisses_contact(self, tmp_path: Any) -> None:
+        client = _gmail_client()
+        cache = TriageCache(tmp_path / "test.db")
+        cache.initialize()
+        result = handle_dismiss_contact({"pattern": "spam@test.com"}, client, cache)
+        assert "Dismissed" in result["content"][0]["text"]
+        assert cache.is_dismissed("spam@test.com")
+        cache.close()
+
+    def test_requires_pattern(self, tmp_path: Any) -> None:
+        client = _gmail_client()
+        cache = TriageCache(tmp_path / "test.db")
+        cache.initialize()
+        result = handle_dismiss_contact({}, client, cache)
+        assert "pattern is required" in result["content"][0]["text"]
+        cache.close()
+
+
+class TestHandleListDismissedContacts:
+    def test_lists_dismissed(self, tmp_path: Any) -> None:
+        client = _gmail_client()
+        cache = TriageCache(tmp_path / "test.db")
+        cache.initialize()
+        cache.dismiss_contact("spam@test.com")
+        result = handle_list_dismissed_contacts({}, client, cache)
+        assert "spam@test.com" in result["content"][0]["text"]
+        cache.close()
+
+    def test_empty_list(self, tmp_path: Any) -> None:
+        client = _gmail_client()
+        cache = TriageCache(tmp_path / "test.db")
+        cache.initialize()
+        result = handle_list_dismissed_contacts({}, client, cache)
+        assert "No dismissed" in result["content"][0]["text"]
+        cache.close()
