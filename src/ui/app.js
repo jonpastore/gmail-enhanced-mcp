@@ -3,45 +3,77 @@ const MCP = {
     token: null,
     baseUrl: '',
 
+    sessionId: null,
+
     init() {
         const params = new URLSearchParams(window.location.search);
         this.token = params.get('token') || localStorage.getItem('mcp_token');
         this.baseUrl = window.location.origin + '/mcp/';
     },
 
-    async call(toolName, args = {}) {
+    async _post(method, params = {}) {
+        const headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, text/event-stream',
+            'Authorization': `Bearer ${this.token}`,
+        };
+        if (this.sessionId) {
+            headers['Mcp-Session-Id'] = this.sessionId;
+        }
         const resp = await fetch(this.baseUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.token}`,
-            },
+            headers,
             body: JSON.stringify({
                 jsonrpc: '2.0',
-                method: 'tools/call',
-                params: { name: toolName, arguments: args },
+                method,
+                params,
                 id: Date.now(),
             }),
         });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        if (!resp.ok) {
+            const text = await resp.text();
+            console.error(`MCP ${method} failed: ${resp.status}`, text);
+            throw new Error(`HTTP ${resp.status}: ${text}`);
+        }
+        const sid = resp.headers.get('Mcp-Session-Id');
+        if (sid) this.sessionId = sid;
+        const contentType = resp.headers.get('Content-Type') || '';
+        let data;
+        if (contentType.includes('text/event-stream')) {
+            const text = await resp.text();
+            const lines = text.split('\n');
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    data = JSON.parse(line.substring(6));
+                    break;
+                }
+            }
+            if (!data) throw new Error('No data in SSE response');
+        } else {
+            data = await resp.json();
+        }
         if (data.error) throw new Error(data.error.message);
+        return data;
+    },
+
+    async initialize() {
+        const data = await this._post('initialize', {
+            protocolVersion: '2024-11-05',
+            capabilities: {},
+            clientInfo: { name: 'gmail-hygiene-ui', version: '1.0.0' },
+        });
+        console.log('MCP initialized:', data.result?.serverInfo);
+        return data.result;
+    },
+
+    async call(toolName, args = {}) {
+        const data = await this._post('tools/call', { name: toolName, arguments: args });
         const text = data.result?.content?.[0]?.text || '';
         return text;
     },
 
     async listTools() {
-        const resp = await fetch(this.baseUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.token}`,
-            },
-            body: JSON.stringify({
-                jsonrpc: '2.0', method: 'tools/list', params: {}, id: Date.now(),
-            }),
-        });
-        const data = await resp.json();
+        const data = await this._post('tools/list', {});
         return data.result?.tools || [];
     },
 };
@@ -59,6 +91,7 @@ const App = {
             return;
         }
         try {
+            await MCP.initialize();
             await MCP.listTools();
             localStorage.setItem('mcp_token', MCP.token);
             document.getElementById('auth-screen').style.display = 'none';
