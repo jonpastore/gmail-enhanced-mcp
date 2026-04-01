@@ -34,13 +34,35 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if path in self._exempt or any(path.startswith(p) for p in self._exempt if p.endswith("/")):
             return await call_next(request)
+        if request.method == "OPTIONS":
+            return self._cors_response()
         auth = request.headers.get("authorization", "")
         query_token = request.query_params.get("token", "")
         if auth.startswith("Bearer ") and auth[7:] == self._token:
-            return await call_next(request)
+            resp = await call_next(request)
+            self._add_cors_headers(resp)
+            return resp
         if query_token == self._token:
-            return await call_next(request)
+            resp = await call_next(request)
+            self._add_cors_headers(resp)
+            return resp
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    def _cors_response(self) -> JSONResponse:
+        return JSONResponse(
+            {},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization, Mcp-Session-Id",
+                "Access-Control-Expose-Headers": "Mcp-Session-Id",
+            },
+        )
+
+    @staticmethod
+    def _add_cors_headers(resp: Any) -> None:
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Expose-Headers"] = "Mcp-Session-Id"
 
 
 def create_mcp_server(tool_registry: ToolRegistry) -> Server:

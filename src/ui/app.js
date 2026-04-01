@@ -29,6 +29,7 @@ const MCP = {
                 params,
                 id: Date.now(),
             }),
+            mode: 'same-origin',
         });
         if (!resp.ok) {
             const text = await resp.text();
