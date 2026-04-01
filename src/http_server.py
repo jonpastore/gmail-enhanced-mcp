@@ -31,7 +31,8 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         self._exempt = exempt_paths or {"/health"}
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
-        if request.url.path in self._exempt:
+        path = request.url.path
+        if path in self._exempt or any(path.startswith(p) for p in self._exempt if p.endswith("/")):
             return await call_next(request)
         auth = request.headers.get("authorization", "")
         query_token = request.query_params.get("token", "")
@@ -87,7 +88,7 @@ def create_app(cfg: Config) -> Starlette:
     middleware: list[Middleware] = []
     if cfg.mcp_auth_token:
         middleware.append(
-            Middleware(BearerAuthMiddleware, token=cfg.mcp_auth_token, exempt_paths={"/health"})
+            Middleware(BearerAuthMiddleware, token=cfg.mcp_auth_token, exempt_paths={"/health", "/ui/"})
         )
 
     ui_dir = Path(__file__).parent / "ui"
