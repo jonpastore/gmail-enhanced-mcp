@@ -107,6 +107,21 @@ def create_app(cfg: Config) -> Starlette:
     async def health(request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "version": "2.0.0"})
 
+    async def restart(request: Request) -> JSONResponse:
+        import os
+        import sys
+        import threading
+
+        logger.info("Restart requested — re-execing process in 1s")
+
+        def _restart() -> None:
+            import time
+            time.sleep(1)
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        threading.Thread(target=_restart, daemon=True).start()
+        return JSONResponse({"status": "restarting"})
+
     @contextlib.asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
         async with session_manager.run():
@@ -125,6 +140,7 @@ def create_app(cfg: Config) -> Starlette:
     return Starlette(
         routes=[
             Route("/health", health),
+            Route("/restart", restart, methods=["POST"]),
             Mount("/mcp", app=session_manager.handle_request),
             Mount("/ui", app=StaticFiles(directory=str(ui_dir), html=True), name="ui"),
         ],
