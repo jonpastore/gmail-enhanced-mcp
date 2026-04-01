@@ -109,17 +109,25 @@ def create_app(cfg: Config) -> Starlette:
 
     async def restart(request: Request) -> JSONResponse:
         import os
+        import subprocess
         import sys
         import threading
 
-        logger.info("Restart requested — re-execing process in 1s")
+        logger.info("Restart requested — spawning new process and exiting")
 
         def _restart() -> None:
             import time
             time.sleep(1)
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            env = os.environ.copy()
+            subprocess.Popen(
+                [sys.executable] + sys.argv,
+                env=env,
+                start_new_session=True,
+            )
+            time.sleep(1)
+            os._exit(0)
 
-        threading.Thread(target=_restart, daemon=True).start()
+        threading.Thread(target=_restart, daemon=False).start()
         return JSONResponse({"status": "restarting"})
 
     @contextlib.asynccontextmanager
