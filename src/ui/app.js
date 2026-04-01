@@ -269,23 +269,51 @@ const Inbox = {
         const email = (msg.from.match(/<(.+)>/) || ['', msg.from])[1];
         const isUnread = msg.labels.includes('UNREAD');
         const checked = this.selected.has(msg.id) ? 'checked' : '';
+        const escapedEmail = email.replace(/'/g, "\\'");
+        const escapedSender = sender.replace(/'/g, "\\'");
 
-        return `<div class="msg-row" data-id="${msg.id}">
+        return `<div class="msg-row" data-id="${msg.id}" data-email="${email}">
             <input type="checkbox" ${checked} onchange="Inbox.toggleSelect('${msg.id}')">
             <div class="priority-dot normal"></div>
-            <div class="msg-content" onclick="Inbox.preview('${msg.id}')">
+            <div class="msg-content">
                 <div class="msg-header">
-                    <span class="msg-sender">${sender}<span class="msg-email">${email}</span></span>
+                    <span class="msg-sender" onclick="Inbox.filterBySender('${escapedEmail}')" title="Show all from ${escapedSender}" style="cursor:pointer">${sender}<span class="msg-email">${email}</span></span>
                     <span class="msg-date">${this.formatDate(msg.date)}</span>
                 </div>
                 <div class="msg-subject" style="${isUnread ? 'color:var(--text-primary);font-weight:600' : ''}">${msg.subject}</div>
             </div>
             <div class="msg-actions">
-                <button class="action-btn" onclick="Inbox.trash(['${msg.id}'])" title="Trash">&#x1F5D1;</button>
-                <button class="action-btn" onclick="Inbox.spam(['${msg.id}'])" title="Spam">&#x26D4;</button>
-                <button class="action-btn" onclick="Inbox.blockSender('${email}')" title="Block">&#x1F6AB;</button>
+                <button class="action-btn" onclick="Inbox.unsub('${msg.id}')" title="Unsubscribe">U</button>
+                <button class="action-btn" onclick="Inbox.trash(['${msg.id}'])" title="Trash">T</button>
+                <button class="action-btn" onclick="Inbox.spam(['${msg.id}'])" title="Spam">S</button>
+                <button class="action-btn" onclick="Inbox.blockSender('${escapedEmail}')" title="Block">B</button>
             </div>
         </div>`;
+    },
+
+    filterBySender(email) {
+        this.activeFilter = 'from:' + email;
+        this.pageToken = null;
+        this.load();
+    },
+
+    async unsub(msgId) {
+        try {
+            const args = { messageId: msgId };
+            if (App.currentAccount) args.account = App.currentAccount;
+            const result = await MCP.call('gmail_get_unsubscribe_link', args);
+            const urlMatch = result.match(/URL:\s*(\S+)/);
+            const mailtoMatch = result.match(/Email:\s*(\S+)/);
+            if (urlMatch) {
+                window.open(urlMatch[1], '_blank');
+            } else if (mailtoMatch) {
+                window.open(mailtoMatch[1], '_blank');
+            } else {
+                alert('No unsubscribe link found in this message.');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
     },
 
     formatDate(dateStr) {
@@ -315,6 +343,16 @@ const Inbox = {
         });
         document.querySelectorAll('.msg-row input[type="checkbox"]').forEach(cb => cb.checked = all);
         this.updateBulkBar();
+    },
+
+    selectAll() {
+        document.getElementById('select-all').checked = true;
+        this.toggleSelectAll();
+    },
+
+    selectNone() {
+        document.getElementById('select-all').checked = false;
+        this.toggleSelectAll();
     },
 
     updateBulkBar() {
