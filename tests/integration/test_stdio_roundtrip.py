@@ -57,9 +57,9 @@ class TestStdioRoundtrip:
         )
         assert results[0]["result"]["serverInfo"]["name"] == "gmail-enhanced-mcp"
 
-    def test_tools_list_returns_15_tools(self) -> None:
+    def test_tools_list_returns_28_tools(self) -> None:
         results = _roundtrip({"jsonrpc": "2.0", "method": "tools/list", "params": {}, "id": 2})
-        assert len(results[0]["result"]["tools"]) == 15
+        assert len(results[0]["result"]["tools"]) == 28
 
     def test_tool_call_get_profile(self) -> None:
         results = _roundtrip(

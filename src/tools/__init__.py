@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from ..models import ToolCallParams
+from ..triage.cache import TriageCache
 from .attachments import handle_download_attachment
 from .drafts import handle_create_draft, handle_list_drafts, handle_send_draft, handle_update_draft
 from .labels import handle_list_labels, handle_modify_thread_labels
@@ -15,8 +17,25 @@ from .search import (
     handle_read_thread,
     handle_search_messages,
 )
+from .hygiene import (
+    handle_block_sender,
+    handle_get_unsubscribe_link,
+    handle_import_contacts_as_priority,
+    handle_list_contacts,
+    handle_report_spam,
+    handle_trash_messages,
+)
 from .send import handle_send_email
 from .templates import handle_save_template, handle_use_template
+from .triage import (
+    handle_add_priority_sender,
+    handle_check_followups,
+    handle_list_priority_senders,
+    handle_remove_priority_sender,
+    handle_reset_triage_cache,
+    handle_track_followup,
+    handle_triage_inbox,
+)
 
 if TYPE_CHECKING:
     from ..account_registry import AccountRegistry
@@ -266,9 +285,217 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "gmail_triage_inbox",
+        "description": (
+            "Score, detect junk, and suggest sorting for a batch of messages."
+            " Returns importance scores, junk flags, and label proposals."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "q": {"type": "string", "description": "Search query (e.g. 'is:unread')"},
+                "maxResults": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Max messages to triage",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "gmail_add_priority_sender",
+        "description": "Add an email or domain pattern to the priority sender list.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Email or domain glob (e.g. '*@irs.gov')",
+                },
+                "tier": {
+                    "type": "string",
+                    "enum": ["critical", "high", "normal"],
+                    "description": "Priority tier",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Human-readable label (e.g. 'Government')",
+                },
+            },
+            "required": ["pattern", "tier", "label"],
+        },
+    },
+    {
+        "name": "gmail_list_priority_senders",
+        "description": "List all priority sender patterns grouped by tier.",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "gmail_remove_priority_sender",
+        "description": "Remove a priority sender pattern.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string", "description": "Pattern to remove"},
+            },
+            "required": ["pattern"],
+        },
+    },
+    {
+        "name": "gmail_track_followup",
+        "description": "Start tracking a sent message for follow-up replies.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "messageId": {
+                    "type": "string",
+                    "description": "The sent message ID to track",
+                },
+                "expectedDays": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": "Days to expect a reply",
+                },
+            },
+            "required": ["messageId"],
+        },
+    },
+    {
+        "name": "gmail_check_followups",
+        "description": (
+            "Check all tracked follow-ups for replies," " overdue items, and approaching deadlines."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "includeOverdue": {"type": "boolean", "default": True},
+                "includeApproachingDeadline": {"type": "boolean", "default": True},
+                "withinDays": {
+                    "type": "integer",
+                    "default": 2,
+                    "description": "Days ahead for deadline check",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "gmail_reset_triage_cache",
+        "description": "Reset the triage cache (delete all cached data). Requires confirm=true.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm reset",
+                },
+            },
+            "required": ["confirm"],
+        },
+    },
+    {
         "name": "gmail_list_accounts",
         "description": "List all registered email accounts.",
         "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "gmail_trash_messages",
+        "description": "Trash messages by IDs or search query.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "messageIds": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of message IDs to trash",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Gmail search query to find messages to trash",
+                },
+                "maxResults": {
+                    "type": "integer",
+                    "default": 500,
+                    "description": "Max messages to trash when using query",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "gmail_block_sender",
+        "description": "Block a sender: create auto-delete filter and trash existing messages.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sender": {
+                    "type": "string",
+                    "description": "Email address or domain to block",
+                },
+            },
+            "required": ["sender"],
+        },
+    },
+    {
+        "name": "gmail_report_spam",
+        "description": "Report messages as spam (trains Gmail spam filter).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "messageIds": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Message IDs to report as spam",
+                },
+            },
+            "required": ["messageIds"],
+        },
+    },
+    {
+        "name": "gmail_list_contacts",
+        "description": "List Google contacts with email addresses.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "maxResults": {
+                    "type": "integer",
+                    "default": 2000,
+                    "description": "Max contacts to return",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "gmail_import_contacts_as_priority",
+        "description": "Import Google contacts as priority senders at a specified tier.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tier": {
+                    "type": "string",
+                    "enum": ["critical", "high", "normal"],
+                    "default": "normal",
+                    "description": "Priority tier for imported contacts",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "gmail_get_unsubscribe_link",
+        "description": "Extract unsubscribe link from a message's List-Unsubscribe header.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "messageId": {
+                    "type": "string",
+                    "description": "Message ID to extract unsubscribe link from",
+                },
+            },
+            "required": ["messageId"],
+        },
     },
 ]
 
@@ -291,14 +518,38 @@ _HANDLER_MAP: dict[str, Any] = {
     "gmail_modify_thread_labels": handle_modify_thread_labels,
     "gmail_save_template": handle_save_template,
     "gmail_use_template": handle_use_template,
+    "gmail_trash_messages": handle_trash_messages,
+    "gmail_block_sender": handle_block_sender,
+    "gmail_report_spam": handle_report_spam,
+    "gmail_list_contacts": handle_list_contacts,
+    "gmail_get_unsubscribe_link": handle_get_unsubscribe_link,
+}
+
+_TRIAGE_HANDLER_MAP: dict[str, Any] = {
+    "gmail_triage_inbox": handle_triage_inbox,
+    "gmail_add_priority_sender": handle_add_priority_sender,
+    "gmail_list_priority_senders": handle_list_priority_senders,
+    "gmail_remove_priority_sender": handle_remove_priority_sender,
+    "gmail_track_followup": handle_track_followup,
+    "gmail_check_followups": handle_check_followups,
+    "gmail_reset_triage_cache": handle_reset_triage_cache,
+    "gmail_import_contacts_as_priority": handle_import_contacts_as_priority,
 }
 
 
 class ToolRegistry:
-    def __init__(self, account_registry: AccountRegistry | None = None) -> None:
+    def __init__(
+        self,
+        account_registry: AccountRegistry | None = None,
+        cache_db_path: str | None = None,
+    ) -> None:
         self._registry = account_registry
         self._tools = {t["name"]: t for t in TOOL_DEFINITIONS}
         self._handlers = dict(_HANDLER_MAP)
+        self._triage_handlers = dict(_TRIAGE_HANDLER_MAP)
+        db_path = Path(cache_db_path) if cache_db_path else Path(":memory:")
+        self._triage_cache = TriageCache(db_path)
+        self._triage_cache.initialize()
 
     def list_tools(self) -> list[dict[str, Any]]:
         return list(self._tools.values())
@@ -306,14 +557,25 @@ class ToolRegistry:
     def execute_tool(self, params: ToolCallParams) -> dict[str, Any]:
         if params.name == "gmail_list_accounts":
             return self._handle_list_accounts()
+
+        args = dict(params.arguments)
+        account = args.pop("account", None)
+        client = self._registry.get(account) if self._registry else None
+
+        triage_handler = self._triage_handlers.get(params.name)
+        if triage_handler is not None:
+            logger.info(f"Executing triage tool: {params.name}")
+            return triage_handler(args, client, self._triage_cache)  # type: ignore[no-any-return]
+
         handler = self._handlers.get(params.name)
         if handler is None:
             raise ValueError(f"Unknown tool: {params.name}")
         logger.info(f"Executing tool: {params.name}")
-        args = dict(params.arguments)
-        account = args.pop("account", None)
-        client = self._registry.get(account) if self._registry else None
         return handler(args, client)  # type: ignore[no-any-return]
+
+    def close(self) -> None:
+        """Close the triage cache on shutdown."""
+        self._triage_cache.close()
 
     def _handle_list_accounts(self) -> dict[str, Any]:
         if self._registry is None:

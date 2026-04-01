@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..gmail_client import GmailClient
+from ..email_client import EmailClient
 
 
 def _text_content(text: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}]}
 
 
-def handle_send_email(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
+def handle_send_email(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
     to = args.get("to")
     if not to:
         raise ValueError("to is required")

@@ -4,7 +4,7 @@ import base64
 import json
 from typing import Any
 
-from ..gmail_client import GmailClient
+from ..email_client import EmailClient
 
 
 def _text_content(text: str) -> dict[str, Any]:
@@ -73,12 +73,12 @@ def _format_message(msg: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def handle_get_profile(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
+def handle_get_profile(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
     profile = client.get_profile()
     return _text_content(json.dumps(profile, indent=2))
 
 
-def handle_search_messages(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
+def handle_search_messages(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
     result = client.search_messages(
         q=args.get("q"),
         max_results=args.get("maxResults", 20),
@@ -96,7 +96,7 @@ def handle_search_messages(args: dict[str, Any], client: GmailClient) -> dict[st
     return _text_content("\n".join(lines))
 
 
-def handle_read_message(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
+def handle_read_message(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
     message_id = args.get("messageId")
     if not message_id:
         raise ValueError("messageId is required")
@@ -104,7 +104,7 @@ def handle_read_message(args: dict[str, Any], client: GmailClient) -> dict[str, 
     return _text_content(_format_message(msg))
 
 
-def handle_read_thread(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
+def handle_read_thread(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
     thread_id = args.get("threadId")
     if not thread_id:
         raise ValueError("threadId is required")

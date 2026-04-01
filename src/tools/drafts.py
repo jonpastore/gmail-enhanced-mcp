@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..gmail_client import GmailClient
+from ..email_client import EmailClient
 
 
 def _text_content(text: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}]}
 
 
-def handle_create_draft(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
+def handle_create_draft(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
     body = args.get("body")
     if not body:
         raise ValueError("body is required")
@@ -30,7 +30,7 @@ def handle_create_draft(args: dict[str, Any], client: GmailClient) -> dict[str, 
     )
 
 
-def handle_update_draft(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
+def handle_update_draft(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
     draft_id = args.get("draftId")
     if not draft_id:
         raise ValueError("draftId is required")
@@ -47,7 +47,7 @@ def handle_update_draft(args: dict[str, Any], client: GmailClient) -> dict[str, 
     return _text_content(f"Draft updated.\nDraft ID: {result['id']}")
 
 
-def handle_list_drafts(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
+def handle_list_drafts(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
     result = client.list_drafts(
         max_results=args.get("maxResults", 20), page_token=args.get("pageToken")
     )
@@ -62,7 +62,7 @@ def handle_list_drafts(args: dict[str, Any], client: GmailClient) -> dict[str, A
     return _text_content("\n".join(lines))
 
 
-def handle_send_draft(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
+def handle_send_draft(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
     draft_id = args.get("draftId")
     if not draft_id:
         raise ValueError("draftId is required")

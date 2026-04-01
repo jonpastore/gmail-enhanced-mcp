@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..gmail_client import GmailClient
+from ..email_client import EmailClient
 
 
 def _text_content(text: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}]}
 
 
-def handle_list_labels(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
+def handle_list_labels(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
     labels = client.list_labels()
     lines = [f"Found {len(labels)} labels:"]
     for label in labels:
@@ -19,7 +19,7 @@ def handle_list_labels(args: dict[str, Any], client: GmailClient) -> dict[str, A
     return _text_content("\n".join(lines))
 
 
-def handle_modify_thread_labels(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
+def handle_modify_thread_labels(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
     thread_id = args.get("threadId")
     if not thread_id:
         raise ValueError("threadId is required")

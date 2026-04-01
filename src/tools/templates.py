@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ..gmail_client import GmailClient
+from ..email_client import EmailClient
 
 DEFAULT_TEMPLATE_DIR = Path("templates")
 
@@ -20,7 +20,7 @@ def _find_placeholders(text: str) -> set[str]:
 
 def handle_save_template(
     args: dict[str, Any],
-    client: GmailClient,
+    client: EmailClient,
     template_dir: Path = DEFAULT_TEMPLATE_DIR,
 ) -> dict[str, Any]:
     name = args.get("name")
@@ -54,7 +54,7 @@ def handle_save_template(
 
 def handle_use_template(
     args: dict[str, Any],
-    client: GmailClient,
+    client: EmailClient,
     template_dir: Path = DEFAULT_TEMPLATE_DIR,
 ) -> dict[str, Any]:
     name = args.get("name")

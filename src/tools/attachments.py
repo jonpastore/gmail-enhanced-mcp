@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..gmail_client import GmailClient
+from ..email_client import EmailClient
 
 
 def _text_content(text: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}]}
 
 
-def handle_download_attachment(args: dict[str, Any], client: GmailClient) -> dict[str, Any]:
+def handle_download_attachment(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
     message_id = args.get("messageId")
     if not message_id:
         raise ValueError("messageId is required")
