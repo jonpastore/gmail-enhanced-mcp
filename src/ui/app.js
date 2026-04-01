@@ -146,6 +146,7 @@ const Inbox = {
     selected: new Set(),
     currentFilter: 'is:unread',
     currentSort: 'score',
+    pageSize: 10,
     page: 0,
     pageToken: null,
     filters: [
@@ -168,7 +169,7 @@ const Inbox = {
         try {
             const filter = this.filters.find(f => f.id === this.activeFilter);
             const query = filter ? filter.query : this.activeFilter;
-            const args = { q: query, maxResults: 10 };
+            const args = { q: query, maxResults: this.pageSize };
             if (App.currentAccount) args.account = App.currentAccount;
             if (this.pageToken) args.pageToken = this.pageToken;
 
@@ -345,6 +346,12 @@ const Inbox = {
         this.updateBulkBar();
     },
 
+    changePageSize() {
+        this.pageSize = parseInt(document.getElementById('page-size').value);
+        this.pageToken = null;
+        this.load();
+    },
+
     selectAll() {
         document.getElementById('select-all').checked = true;
         this.toggleSelectAll();
@@ -406,6 +413,24 @@ const Inbox = {
             }
         }
         this.load();
+    },
+
+    async bulkUnsub() {
+        let found = 0;
+        for (const id of [...this.selected]) {
+            try {
+                const args = { messageId: id };
+                if (App.currentAccount) args.account = App.currentAccount;
+                const result = await MCP.call('gmail_get_unsubscribe_link', args);
+                const urlMatch = result.match(/URL:\s*(\S+)/);
+                if (urlMatch) {
+                    window.open(urlMatch[1], '_blank');
+                    found++;
+                }
+            } catch (e) { /* skip */ }
+        }
+        if (found === 0) alert('No unsubscribe links found in selected messages.');
+        else alert(`Opened ${found} unsubscribe link(s) in new tabs.`);
     },
 
     async bulkPriority() {

@@ -34,6 +34,11 @@
             <div class="sort-bar">
                 <label><input type="checkbox" id="select-all" onchange="Inbox.toggleSelectAll()"> Select all</label>
                 <div class="sort-options">
+                    <select id="page-size" onchange="Inbox.changePageSize()" style="background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:12px;">
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
                     <span class="active" onclick="Inbox.sort('score')">Priority Score</span>
                     <span onclick="Inbox.sort('date')">Date</span>
                     <span onclick="Inbox.sort('sender')">Sender</span>
@@ -45,6 +50,7 @@
                 <button class="bulk-btn" onclick="Inbox.bulkTrash()">Trash</button>
                 <button class="bulk-btn" onclick="Inbox.bulkSpam()">Spam</button>
                 <button class="bulk-btn" onclick="Inbox.bulkBlock()">Block Senders</button>
+                <button class="bulk-btn" onclick="Inbox.bulkUnsub()">Unsubscribe</button>
                 <button class="bulk-btn priority" onclick="Inbox.bulkPriority()">+ Priority</button>
             </div>
             <div id="message-list"></div>
