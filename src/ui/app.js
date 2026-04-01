@@ -168,7 +168,7 @@ const Inbox = {
         try {
             const filter = this.filters.find(f => f.id === this.activeFilter);
             const query = filter ? filter.query : this.activeFilter;
-            const args = { q: query, maxResults: 50 };
+            const args = { q: query, maxResults: 10 };
             if (App.currentAccount) args.account = App.currentAccount;
             if (this.pageToken) args.pageToken = this.pageToken;
 
@@ -176,17 +176,21 @@ const Inbox = {
             const lines = text.split('\n');
             this.messages = [];
             let nextToken = null;
+            let totalEstimate = 0;
 
             for (const line of lines) {
                 const idMatch = line.match(/id:\s*(\S+)\s+threadId:\s*(\S+)/);
                 if (idMatch) {
-                    this.messages.push({ id: idMatch[1], threadId: idMatch[2] });
+                    this.messages.push({ id: idMatch[1], threadId: idMatch[2], loaded: false });
                 }
                 const tokenMatch = line.match(/Next page token:\s*(\S+)/);
                 if (tokenMatch) nextToken = tokenMatch[1];
+                const countMatch = line.match(/Found (\d+) results/);
+                if (countMatch) totalEstimate = parseInt(countMatch[1]);
             }
             this.pageToken = nextToken;
-            this.renderMessages();
+            this.totalEstimate = totalEstimate;
+            await this.renderMessages();
         } catch (e) {
             list.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
         }
@@ -222,7 +226,9 @@ const Inbox = {
             return;
         }
 
+        list.innerHTML = `<div class="loading">Loading ${this.messages.length} messages...</div>`;
         let html = '';
+        let loaded = 0;
         for (const msg of this.messages) {
             try {
                 const args = { messageId: msg.id };
@@ -230,8 +236,11 @@ const Inbox = {
                 const text = await MCP.call('gmail_read_message', args);
                 const parsed = this.parseMessage(text, msg.id);
                 html += this.renderRow(parsed);
+                loaded++;
+                list.innerHTML = html + `<div class="loading">Loaded ${loaded}/${this.messages.length}...</div>`;
             } catch (e) {
-                html += `<div class="msg-row"><div class="msg-content">Error loading ${msg.id}</div></div>`;
+                html += `<div class="msg-row"><div class="msg-content" style="color:var(--accent)">Error loading ${msg.id}: ${e.message}</div></div>`;
+                loaded++;
             }
         }
         list.innerHTML = html;

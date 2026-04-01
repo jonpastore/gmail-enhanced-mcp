@@ -15,8 +15,12 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/gmail.compose",
     "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/contacts.readonly",
 ]
+
+# contacts.readonly is needed for gmail_import_contacts_as_priority
+# and gmail_list_contacts but causes token refresh failures unless
+# added to the OAuth consent screen. Re-add when needed and re-auth.
+# CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts.readonly"
 
 
 class TokenManager:
