@@ -121,7 +121,7 @@ def create_app(cfg: Config) -> Starlette:
             env = os.environ.copy()
             project_dir = str(Path(__file__).parent.parent)
             subprocess.Popen(
-                [sys.executable] + sys.argv,
+                [sys.executable, "-m", "gmail_mcp", "serve"],
                 env=env,
                 cwd=project_dir,
                 start_new_session=True,
