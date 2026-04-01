@@ -48,6 +48,10 @@ class GmailClient(EmailClient):
             self._service = build("gmail", "v1", credentials=creds)
         return self._service
 
+    def reset_service(self) -> None:
+        """Force rebuild of the Gmail API service on next call."""
+        self._service = None
+
     def get_profile(self) -> dict[str, Any]:
         svc = self._get_service()
         return svc.users().getProfile(userId="me").execute()  # type: ignore[no-any-return]

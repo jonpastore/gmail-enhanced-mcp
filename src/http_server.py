@@ -32,6 +32,13 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
         path = request.url.path
+        logger.info(
+            f"REQ {request.method} {path} | "
+            f"Accept: {request.headers.get('accept', 'MISSING')} | "
+            f"Content-Type: {request.headers.get('content-type', 'MISSING')} | "
+            f"Auth: {'Bearer ...' if request.headers.get('authorization', '').startswith('Bearer ') else request.headers.get('authorization', 'MISSING')[:20]} | "
+            f"Origin: {request.headers.get('origin', 'NONE')}"
+        )
         if path in self._exempt or any(path.startswith(p) for p in self._exempt if p.endswith("/")):
             return await call_next(request)
         if request.method == "OPTIONS":
