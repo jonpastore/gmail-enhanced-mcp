@@ -8,7 +8,9 @@ from loguru import logger
 
 from ..models import ToolCallParams
 from ..triage.cache import TriageCache
+from .ai_context import handle_needs_reply, handle_summarize_thread
 from .attachments import handle_download_attachment
+from .batch_reply import handle_batch_reply
 from .calendar import (
     handle_check_email_conflicts,
     handle_meeting_prep,
@@ -26,6 +28,7 @@ from .hygiene import (
     handle_report_spam,
     handle_trash_messages,
 )
+from .itinerary import handle_extract_itinerary
 from .labels import handle_list_labels, handle_modify_thread_labels
 from .search import (
     handle_get_profile,
@@ -602,6 +605,90 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+        "name": "gmail_summarize_thread",
+        "description": (
+            "Summarize a thread: participants, timeline, key asks,"
+            " deadlines, open questions."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "threadId": {"type": "string", "description": "The thread ID to summarize"},
+            },
+            "required": ["threadId"],
+        },
+    },
+    {
+        "name": "gmail_needs_reply",
+        "description": "Find emails that likely need a response from you.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "maxResults": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Max results to return",
+                },
+                "daysBack": {
+                    "type": "integer",
+                    "default": 7,
+                    "description": "How many days back to search",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "gmail_batch_reply",
+        "description": "Create draft replies for multiple messages in one call.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "replies": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "messageId": {"type": "string"},
+                            "threadId": {"type": "string"},
+                            "body": {"type": "string"},
+                            "subject": {"type": "string"},
+                        },
+                        "required": ["messageId", "threadId", "body"],
+                    },
+                    "description": "List of replies to create as drafts",
+                },
+            },
+            "required": ["replies"],
+        },
+    },
+    {
+        "name": "gmail_extract_itinerary",
+        "description": (
+            "Scan emails for travel bookings and return a structured"
+            " itinerary timeline."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "dateFrom": {
+                    "type": "string",
+                    "description": "Start date (YYYY-MM-DD). Default: today.",
+                },
+                "dateTo": {
+                    "type": "string",
+                    "description": "End date (YYYY-MM-DD). Default: 30 days ahead.",
+                },
+                "maxResults": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "Max emails to scan",
+                },
+            },
+            "required": [],
+        },
+    },
 ]
 
 for _tool in TOOL_DEFINITIONS:
@@ -629,6 +716,10 @@ _HANDLER_MAP: dict[str, Any] = {
     "gmail_list_contacts": handle_list_contacts,
     "gmail_get_unsubscribe_link": handle_get_unsubscribe_link,
     "gmail_create_label": handle_create_label,
+    "gmail_summarize_thread": handle_summarize_thread,
+    "gmail_needs_reply": handle_needs_reply,
+    "gmail_batch_reply": handle_batch_reply,
+    "gmail_extract_itinerary": handle_extract_itinerary,
 }
 
 _CALENDAR_HANDLER_MAP: dict[str, Any] = {
