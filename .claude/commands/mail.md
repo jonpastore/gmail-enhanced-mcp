@@ -7,8 +7,8 @@ description: List all available Gmail Enhanced MCP email commands
 
 ## Quick Actions
 - `/mail:qrcode` — Show QR code to open the Hygiene UI on your phone
-- `/mail:hud-refresh` — Refresh HUD with mail/calendar status (coming soon)
-- `/mail:calendar-reminders` — Ensure upcoming events have reminders (coming soon)
+- `/mail:hud-refresh` — Refresh HUD with unread priority mail + upcoming calendar events
+- `/mail:calendar-reminders` — Ensure upcoming events have 1-day + 1-hour reminders
 
 ## MCP Tools by Category
 
