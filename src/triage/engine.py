@@ -27,6 +27,7 @@ _DEFAULT_WEIGHTS: dict[str, float] = {
     "has_deadline": 0.25,
     "has_attachment": 0.05,
     "recent_24h": 0.05,
+    "meeting_today_sender": 0.15,
     "junk_detected": -0.50,
 }
 
@@ -54,14 +55,21 @@ _NOREPLY_PATTERN = re.compile(
 class ImportanceScorer:
     """Scores email messages by importance using weighted signals."""
 
-    def __init__(self, cache: TriageCache, config_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        cache: TriageCache,
+        config_path: Path | None = None,
+        calendar_ctx: Any | None = None,
+    ) -> None:
         """Load scoring weights from config JSON or use defaults.
 
         Args:
             cache: TriageCache instance for priority sender lookups.
             config_path: Optional path to scoring config JSON file.
+            calendar_ctx: Optional CalendarContext for schedule-aware scoring.
         """
         self._cache = cache
+        self._calendar_ctx = calendar_ctx
         self._weights = dict(_DEFAULT_WEIGHTS)
         self._thresholds = dict(_DEFAULT_THRESHOLDS)
         self._junk_detector = JunkDetector()
@@ -94,6 +102,8 @@ class ImportanceScorer:
     def score_messages(self, messages: list[dict[str, Any]], account: str) -> list[ImportanceScore]:
         """Batch score messages. Returns sorted by score descending.
 
+        Primes calendar context once before scoring loop if available.
+
         Args:
             messages: List of Gmail-format message dicts.
             account: Account email address for context.
@@ -101,6 +111,10 @@ class ImportanceScorer:
         Returns:
             List of ImportanceScore sorted by score descending.
         """
+        if self._calendar_ctx is not None:
+            from datetime import date
+
+            self._calendar_ctx.prime_for_date(date.today())
         scores = [self.score_message(msg, account) for msg in messages]
         scores.sort(key=lambda s: s.score, reverse=True)
         return scores
@@ -140,6 +154,7 @@ class ImportanceScorer:
             lambda: self._signal_has_deadline(msg),
             lambda: self._signal_is_reply_to_me(msg, account),
             lambda: self._signal_has_attachment(msg),
+            lambda: self._signal_meeting_today_sender(from_addr),
             lambda: self._signal_junk_detected(msg),
             lambda: self._signal_recent(msg),
         ]
@@ -221,6 +236,18 @@ class ImportanceScorer:
                     weight=self._weights.get("has_attachment", 0.05),
                     detail="Message has file attachment",
                 )
+        return None
+
+    def _signal_meeting_today_sender(self, from_addr: str) -> ScoringSignal | None:
+        """Check if sender is an attendee of today's/tomorrow's meetings."""
+        if self._calendar_ctx is None:
+            return None
+        if self._calendar_ctx.is_meeting_attendee(from_addr):
+            return ScoringSignal(
+                name="meeting_today_sender",
+                weight=self._weights.get("meeting_today_sender", 0.15),
+                detail="Sender is attendee of upcoming meeting",
+            )
         return None
 
     def _signal_junk_detected(self, msg: dict[str, Any]) -> ScoringSignal | None:

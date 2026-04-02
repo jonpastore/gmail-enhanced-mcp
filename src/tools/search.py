@@ -28,6 +28,32 @@ def _decode_body(body: dict[str, Any]) -> str:
         return ""
 
 
+def _find_body_part(parts: list[dict[str, Any]], mime_type: str) -> str:
+    """Recursively search parts tree for a body with the given MIME type."""
+    for part in parts:
+        if part.get("mimeType") == mime_type:
+            text = _decode_body(part.get("body", {}))
+            if text:
+                return text
+        sub_parts = part.get("parts", [])
+        if sub_parts:
+            text = _find_body_part(sub_parts, mime_type)
+            if text:
+                return text
+    return ""
+
+
+def _extract_body(payload: dict[str, Any]) -> str:
+    """Extract body text from payload, recursing into nested multipart."""
+    parts = payload.get("parts", [])
+    if parts:
+        text = _find_body_part(parts, "text/plain")
+        if not text:
+            text = _find_body_part(parts, "text/html")
+        return text
+    return _decode_body(payload.get("body", {}))
+
+
 def _format_message(msg: dict[str, Any]) -> str:
     payload = msg.get("payload", {})
     headers = payload.get("headers", [])
@@ -36,19 +62,7 @@ def _format_message(msg: dict[str, Any]) -> str:
     subject = _get_header(headers, "Subject")
     date = _get_header(headers, "Date")
 
-    body_text = ""
-    if payload.get("parts"):
-        for part in payload["parts"]:
-            if part.get("mimeType") == "text/plain":
-                body_text = _decode_body(part.get("body", {}))
-                break
-        if not body_text:
-            for part in payload["parts"]:
-                if part.get("mimeType") == "text/html":
-                    body_text = _decode_body(part.get("body", {}))
-                    break
-    else:
-        body_text = _decode_body(payload.get("body", {}))
+    body_text = _extract_body(payload)
 
     attachments = []
     for part in payload.get("parts", []):

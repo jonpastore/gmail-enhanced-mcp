@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from pydantic import ValidationError
@@ -13,6 +13,10 @@ from .models import (
 )
 from .tools import ToolRegistry
 
+if TYPE_CHECKING:
+    from .account_registry import AccountRegistry
+    from .config import Config
+
 
 class ProtocolHandler:
     def __init__(self) -> None:
@@ -22,8 +26,33 @@ class ProtocolHandler:
         cfg = Config()
         registry = AccountRegistry()
         registry.load_from_config(cfg)
-        self.tool_registry = ToolRegistry(account_registry=registry)
+        calendar_ctx = self._build_calendar_ctx(cfg, registry)
+        self.tool_registry = ToolRegistry(account_registry=registry, calendar_ctx=calendar_ctx)
         self.initialized = False
+
+    @staticmethod
+    def _build_calendar_ctx(cfg: Config, registry: AccountRegistry) -> Any:
+        """Build CalendarContext if calendar is enabled."""
+        if not cfg.calendar_enabled:
+            return None
+        try:
+            from .auth import TokenManager
+            from .calendar import GoogleCalendarClient, GoogleCalendarContext
+
+            default_email = cfg.get_default_account()
+            if not default_email:
+                accounts = cfg.load_accounts()
+                gmail_accounts = [a for a in accounts if a.get("provider") == "gmail"]
+                if gmail_accounts:
+                    default_email = gmail_accounts[0]["email"]
+            if not default_email:
+                return None
+            token_path = f"credentials/{default_email}/token.json"
+            tmgr = TokenManager(cfg.client_secret_path, token_path)
+            client = GoogleCalendarClient(tmgr, user_timezone=cfg.user_timezone)
+            return GoogleCalendarContext(client)
+        except Exception:
+            return None
 
     def handle_request(self, raw_request: dict[str, Any]) -> dict[str, Any] | None:
         try:

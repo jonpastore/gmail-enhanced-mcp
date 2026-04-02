@@ -27,8 +27,8 @@ class Config:
         self.ssl_key_path: str | None = os.getenv("SSL_KEY_PATH")
         self.cache_db_path: str = os.getenv("TRIAGE_CACHE_DB", "data/triage_cache.db")
         self.triage_config_path: str = os.getenv("TRIAGE_CONFIG", "data/triage_config.json")
-        self.cache_db_path: str = os.getenv("TRIAGE_CACHE_DB", "data/triage_cache.db")
-        self.triage_config_path: str = os.getenv("TRIAGE_CONFIG", "data/triage_config.json")
+        self.calendar_enabled: bool = os.getenv("CALENDAR_ENABLED", "false").lower() == "true"
+        self.user_timezone: str = os.getenv("USER_TIMEZONE", "America/New_York")
 
     def load_accounts(self) -> list[dict[str, Any]]:
         path = Path(self.accounts_path)

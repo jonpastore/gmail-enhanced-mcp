@@ -72,6 +72,27 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         resp.headers["Access-Control-Expose-Headers"] = "Mcp-Session-Id"
 
 
+def _build_calendar_ctx(cfg: Config) -> Any:
+    """Build CalendarContext if calendar is enabled."""
+    if not cfg.calendar_enabled:
+        return None
+    try:
+        from .auth import TokenManager
+        from .calendar import GoogleCalendarClient, GoogleCalendarContext
+
+        accounts = cfg.load_accounts()
+        gmail_accounts = [a for a in accounts if a.get("provider") == "gmail"]
+        if not gmail_accounts:
+            return None
+        email = gmail_accounts[0]["email"]
+        token_path = f"credentials/{email}/token.json"
+        tmgr = TokenManager(cfg.client_secret_path, token_path)
+        client = GoogleCalendarClient(tmgr, user_timezone=cfg.user_timezone)
+        return GoogleCalendarContext(client)
+    except Exception:
+        return None
+
+
 def create_mcp_server(tool_registry: ToolRegistry) -> Server:
     server = Server("gmail-enhanced-mcp")
 
@@ -100,7 +121,8 @@ def create_mcp_server(tool_registry: ToolRegistry) -> Server:
 def create_app(cfg: Config) -> Starlette:
     registry = AccountRegistry()
     registry.load_from_config(cfg)
-    tool_registry = ToolRegistry(account_registry=registry)
+    calendar_ctx = _build_calendar_ctx(cfg)
+    tool_registry = ToolRegistry(account_registry=registry, calendar_ctx=calendar_ctx)
     mcp_server = create_mcp_server(tool_registry)
     session_manager = StreamableHTTPSessionManager(app=mcp_server)
 
@@ -117,6 +139,7 @@ def create_app(cfg: Config) -> Starlette:
 
         def _restart() -> None:
             import time
+
             time.sleep(1)
             env = os.environ.copy()
             project_dir = str(Path(__file__).parent.parent)
@@ -142,7 +165,9 @@ def create_app(cfg: Config) -> Starlette:
     middleware: list[Middleware] = []
     if cfg.mcp_auth_token:
         middleware.append(
-            Middleware(BearerAuthMiddleware, token=cfg.mcp_auth_token, exempt_paths={"/health", "/ui/"})
+            Middleware(
+                BearerAuthMiddleware, token=cfg.mcp_auth_token, exempt_paths={"/health", "/ui/"}
+            )
         )
 
     ui_dir = Path(__file__).parent / "ui"

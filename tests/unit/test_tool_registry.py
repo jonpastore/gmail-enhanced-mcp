@@ -19,7 +19,7 @@ def _make_registry() -> ToolRegistry:
 
 
 class TestToolRegistryIntegration:
-    def test_all_31_tools_registered(self) -> None:
+    def test_all_34_tools_registered(self) -> None:
         registry = _make_registry()
         tools = registry.list_tools()
         tool_names = {t["name"] for t in tools}
@@ -55,6 +55,9 @@ class TestToolRegistryIntegration:
             "gmail_create_label",
             "gmail_dismiss_contact",
             "gmail_list_dismissed_contacts",
+            "gmail_check_email_conflicts",
+            "gmail_meeting_prep",
+            "gmail_today_briefing",
         }
         assert tool_names == expected
 

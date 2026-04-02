@@ -9,14 +9,12 @@ from loguru import logger
 from ..models import ToolCallParams
 from ..triage.cache import TriageCache
 from .attachments import handle_download_attachment
-from .drafts import handle_create_draft, handle_list_drafts, handle_send_draft, handle_update_draft
-from .labels import handle_list_labels, handle_modify_thread_labels
-from .search import (
-    handle_get_profile,
-    handle_read_message,
-    handle_read_thread,
-    handle_search_messages,
+from .calendar import (
+    handle_check_email_conflicts,
+    handle_meeting_prep,
+    handle_today_briefing,
 )
+from .drafts import handle_create_draft, handle_list_drafts, handle_send_draft, handle_update_draft
 from .hygiene import (
     handle_block_sender,
     handle_create_label,
@@ -27,6 +25,13 @@ from .hygiene import (
     handle_list_dismissed_contacts,
     handle_report_spam,
     handle_trash_messages,
+)
+from .labels import handle_list_labels, handle_modify_thread_labels
+from .search import (
+    handle_get_profile,
+    handle_read_message,
+    handle_read_thread,
+    handle_search_messages,
 )
 from .send import handle_send_email
 from .templates import handle_save_template, handle_use_template
@@ -537,6 +542,66 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+        "name": "gmail_check_email_conflicts",
+        "description": "Scan emails for date/time mentions and cross-reference against calendar.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "q": {"type": "string", "description": "Gmail search query to filter emails"},
+                "maxResults": {
+                    "type": "integer",
+                    "default": 10,
+                    "description": "Max emails to scan",
+                },
+                "daysAhead": {
+                    "type": "integer",
+                    "default": 7,
+                    "description": "How many days ahead to check for conflicts",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "gmail_meeting_prep",
+        "description": "Surface relevant email threads for an upcoming calendar event.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "eventId": {
+                    "type": "string",
+                    "description": "Specific event ID to prep for",
+                },
+                "hoursAhead": {
+                    "type": "integer",
+                    "default": 4,
+                    "description": "Hours ahead to look for upcoming meetings",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "gmail_today_briefing",
+        "description": "Combined inbox triage + calendar overview for the day.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "includeCalendar": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Include calendar events in briefing",
+                },
+                "maxEmails": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Max unread emails to triage",
+                },
+            },
+            "required": [],
+        },
+    },
 ]
 
 for _tool in TOOL_DEFINITIONS:
@@ -566,6 +631,12 @@ _HANDLER_MAP: dict[str, Any] = {
     "gmail_create_label": handle_create_label,
 }
 
+_CALENDAR_HANDLER_MAP: dict[str, Any] = {
+    "gmail_check_email_conflicts": handle_check_email_conflicts,
+    "gmail_meeting_prep": handle_meeting_prep,
+    "gmail_today_briefing": handle_today_briefing,
+}
+
 _TRIAGE_HANDLER_MAP: dict[str, Any] = {
     "gmail_triage_inbox": handle_triage_inbox,
     "gmail_add_priority_sender": handle_add_priority_sender,
@@ -585,11 +656,14 @@ class ToolRegistry:
         self,
         account_registry: AccountRegistry | None = None,
         cache_db_path: str | None = None,
+        calendar_ctx: Any | None = None,
     ) -> None:
         self._registry = account_registry
         self._tools = {t["name"]: t for t in TOOL_DEFINITIONS}
         self._handlers = dict(_HANDLER_MAP)
         self._triage_handlers = dict(_TRIAGE_HANDLER_MAP)
+        self._calendar_handlers = dict(_CALENDAR_HANDLER_MAP)
+        self._calendar_ctx = calendar_ctx
         db_path = Path(cache_db_path) if cache_db_path else Path(":memory:")
         self._triage_cache = TriageCache(db_path)
         self._triage_cache.initialize()
@@ -604,6 +678,24 @@ class ToolRegistry:
         args = dict(params.arguments)
         account = args.pop("account", None)
         client = self._registry.get(account) if self._registry else None
+
+        calendar_handler = self._calendar_handlers.get(params.name)
+        if calendar_handler is not None:
+            logger.info(f"Executing calendar tool: {params.name}")
+            if self._calendar_ctx is None:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "Error: Calendar not configured. "
+                                "Set CALENDAR_ENABLED=true and run: python -m gmail_mcp auth"
+                            ),
+                        }
+                    ],
+                    "isError": True,
+                }
+            return calendar_handler(args, client, self._calendar_ctx, self._triage_cache)  # type: ignore[no-any-return]
 
         triage_handler = self._triage_handlers.get(params.name)
         if triage_handler is not None:

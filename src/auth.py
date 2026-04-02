@@ -17,6 +17,10 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
 ]
 
+CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
+
+AUTH_SCOPES = SCOPES + [CALENDAR_SCOPE]
+
 # contacts.readonly is needed for gmail_import_contacts_as_priority
 # and gmail_list_contacts but causes token refresh failures unless
 # added to the OAuth consent screen. Re-add when needed and re-auth.
@@ -43,6 +47,16 @@ class TokenManager:
         self._token_path.parent.mkdir(parents=True, exist_ok=True)
         self._token_path.write_text(creds.to_json())  # type: ignore[no-untyped-call]
         logger.info("Token saved")
+
+    def validate_scopes(self, required_scopes: list[str]) -> None:
+        creds = self.get_credentials()
+        granted = set(creds.scopes or []) if creds.scopes else set()
+        missing = [s for s in required_scopes if s not in granted]
+        if missing:
+            scope_names = ", ".join(s.rsplit("/", 1)[-1] for s in missing)
+            raise RuntimeError(
+                f"Missing OAuth scope(s): {scope_names}. " "Run: python -m gmail_mcp auth"
+            )
 
     def get_credentials(self) -> Credentials:
         if self._cached_creds and self._cached_creds.valid:
@@ -135,7 +149,7 @@ def run_auth_flow(cfg: Config, provider: str = "gmail") -> None:
             print("Download from: Google Cloud Console > APIs & Services > Credentials")
             return
 
-        flow = InstalledAppFlow.from_client_secrets_file(cfg.client_secret_path, SCOPES)
+        flow = InstalledAppFlow.from_client_secrets_file(cfg.client_secret_path, AUTH_SCOPES)
         creds = flow.run_local_server(port=0)
 
         mgr = TokenManager(cfg.client_secret_path, cfg.token_path)
