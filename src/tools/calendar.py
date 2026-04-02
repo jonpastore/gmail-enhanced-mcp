@@ -6,45 +6,47 @@ import time
 from datetime import date, datetime
 from typing import Any
 
-from ..calendar.context import CalendarContext, ConflictResult, MeetingPrepContext
+from ..calendar.context import ConflictResult, MeetingPrepContext
 from ..calendar.date_parser import DateParser
-from ..email_client import EmailClient
-from ..triage.cache import TriageCache
+from ..handler_context import HandlerContext
 from ..triage.engine import ImportanceScorer
 from ..triage.models import GmailMCPError
-
-
-def _text_content(text: str) -> dict[str, Any]:
-    return {"content": [{"type": "text", "text": text}]}
-
-
-def _error_content(msg: str) -> dict[str, Any]:
-    return {"content": [{"type": "text", "text": f"Error: {msg}"}], "isError": True}
+from .response import error_content as _error_content
+from .response import text_content as _text_content
 
 
 def handle_check_email_conflicts(
     args: dict[str, Any],
-    client: EmailClient,
-    calendar_ctx: CalendarContext,
-    cache: TriageCache,
+    ctx: HandlerContext,
 ) -> dict[str, Any]:
     """Scan emails for date mentions and cross-reference against calendar.
 
     Args:
         args: Tool arguments with optional q, maxResults, daysAhead.
-        client: Email client for searching messages.
-        calendar_ctx: Calendar context for event lookups.
-        cache: Triage cache (unused, required by signature).
+        ctx: Handler context with client, calendar_ctx, and cache.
 
     Returns:
         MCP content with conflict results.
     """
+    if ctx.calendar_ctx is None:
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        "Error: Calendar not configured. "
+                        "Set CALENDAR_ENABLED=true and run: python -m gmail_mcp auth"
+                    ),
+                }
+            ],
+            "isError": True,
+        }
     try:
         q = args.get("q")
         max_results = args.get("maxResults", 10)
         days_ahead = args.get("daysAhead", 7)
 
-        search_result = client.search_messages(q=q, max_results=max_results)
+        search_result = ctx.client.search_messages(q=q, max_results=max_results)
         message_stubs = search_result.get("messages", [])
 
         if not message_stubs:
@@ -55,7 +57,7 @@ def handle_check_email_conflicts(
         conflicts: list[ConflictResult] = []
 
         for stub in message_stubs:
-            msg = client.read_message(stub["id"])
+            msg = ctx.client.read_message(stub["id"])
             headers = _extract_headers(msg)
             subject = headers.get("subject", "")
             snippet = msg.get("snippet", "")
@@ -68,7 +70,7 @@ def handle_check_email_conflicts(
                 if (mention.resolved_date - ref_date).days > days_ahead:
                     continue
 
-                events = calendar_ctx.get_events_for_date(mention.resolved_date)
+                events = ctx.calendar_ctx.get_events_for_date(mention.resolved_date)
                 if events:
                     severity = "hard_conflict" if len(events) >= 3 else "busy_day"
                     conflicts.append(
@@ -106,24 +108,33 @@ def handle_check_email_conflicts(
 
 def handle_meeting_prep(
     args: dict[str, Any],
-    client: EmailClient,
-    calendar_ctx: CalendarContext,
-    cache: TriageCache,
+    ctx: HandlerContext,
 ) -> dict[str, Any]:
     """Surface relevant email threads for an upcoming calendar event.
 
     Args:
         args: Tool arguments with optional eventId, hoursAhead.
-        client: Email client for searching threads.
-        calendar_ctx: Calendar context for event lookups.
-        cache: Triage cache (unused, required by signature).
+        ctx: Handler context with client and calendar_ctx.
 
     Returns:
         MCP content with meeting prep context.
     """
+    if ctx.calendar_ctx is None:
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        "Error: Calendar not configured. "
+                        "Set CALENDAR_ENABLED=true and run: python -m gmail_mcp auth"
+                    ),
+                }
+            ],
+            "isError": True,
+        }
     try:
         hours_ahead = args.get("hoursAhead", 4)
-        today_events = calendar_ctx.get_today_events()
+        today_events = ctx.calendar_ctx.get_today_events()
 
         if not today_events:
             return _text_content("No meetings found today.")
@@ -153,7 +164,7 @@ def handle_meeting_prep(
             related_threads: list[dict[str, Any]] = []
 
             for email_addr in attendee_emails[:5]:
-                search_result = client.search_messages(q=f"from:{email_addr}", max_results=3)
+                search_result = ctx.client.search_messages(q=f"from:{email_addr}", max_results=3)
                 threads = search_result.get("messages", [])
                 for t in threads[:2]:
                     related_threads.append(
@@ -193,9 +204,7 @@ def handle_meeting_prep(
 
 def handle_today_briefing(
     args: dict[str, Any],
-    client: EmailClient,
-    calendar_ctx: CalendarContext,
-    cache: TriageCache,
+    ctx: HandlerContext,
 ) -> dict[str, Any]:
     """Combined inbox triage + calendar overview for the day.
 
@@ -204,24 +213,35 @@ def handle_today_briefing(
 
     Args:
         args: Tool arguments with optional includeCalendar, maxEmails.
-        client: Email client for searching messages.
-        calendar_ctx: Calendar context for today's events.
-        cache: Triage cache for scoring.
+        ctx: Handler context with client, calendar_ctx, and cache.
 
     Returns:
         MCP content with briefing.
     """
+    if ctx.calendar_ctx is None:
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        "Error: Calendar not configured. "
+                        "Set CALENDAR_ENABLED=true and run: python -m gmail_mcp auth"
+                    ),
+                }
+            ],
+            "isError": True,
+        }
     try:
         include_calendar = args.get("includeCalendar", True)
         max_emails = args.get("maxEmails", 20)
 
-        search_result = client.search_messages(q="is:unread", max_results=max_emails)
+        search_result = ctx.client.search_messages(q="is:unread", max_results=max_emails)
         message_stubs = search_result.get("messages", [])
 
         lines: list[str] = ["Today's Briefing", "=" * 40, ""]
 
         if include_calendar:
-            events = calendar_ctx.get_today_events()
+            events = ctx.calendar_ctx.get_today_events()
             if events:
                 lines.append(f"Calendar ({len(events)} events):")
                 for ev in events:
@@ -248,11 +268,12 @@ def handle_today_briefing(
                 time.sleep(0.1)
             batch = message_stubs[i : i + batch_size]
             for stub in batch:
-                msg = client.read_message(stub["id"])
+                msg = ctx.client.read_message(stub["id"])
                 messages.append(msg)
 
-        scorer = ImportanceScorer(cache, calendar_ctx=calendar_ctx)
-        account = client.email_address
+        assert ctx.cache is not None
+        scorer = ImportanceScorer(ctx.cache, calendar_ctx=ctx.calendar_ctx)
+        account = ctx.client.email_address
         scores = scorer.score_messages(messages, account)
 
         lines.append(f"Inbox ({len(scores)} unread):")

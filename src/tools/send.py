@@ -2,21 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..email_client import EmailClient
+from ..handler_context import HandlerContext
+from .response import text_content as _text_content
 
 
-def _text_content(text: str) -> dict[str, Any]:
-    return {"content": [{"type": "text", "text": text}]}
-
-
-def handle_send_email(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_send_email(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     to = args.get("to")
     if not to:
         raise ValueError("to is required")
     body = args.get("body")
     if not body:
         raise ValueError("body is required")
-    result = client.send_email(
+    result = ctx.client.send_email(
         to=to,
         subject=args.get("subject", ""),
         body=body,

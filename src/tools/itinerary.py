@@ -5,21 +5,13 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from ..email_client import EmailClient
+from ..handler_context import HandlerContext
 from ..itinerary_parser import ItineraryParser
+from .response import error_content as _error_content
+from .response import text_content as _text_content
 
 
-def _text_content(text: str) -> dict[str, Any]:
-    """Return MCP-format text content."""
-    return {"content": [{"type": "text", "text": text}]}
-
-
-def _error_content(msg: str) -> dict[str, Any]:
-    """Return MCP-format error content."""
-    return {"content": [{"type": "text", "text": f"Error: {msg}"}], "isError": True}
-
-
-def handle_extract_itinerary(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_extract_itinerary(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Extract travel itinerary segments from inbox messages.
 
     Searches for confirmation and booking emails within the given date window,
@@ -27,7 +19,7 @@ def handle_extract_itinerary(args: dict[str, Any], client: EmailClient) -> dict[
 
     Args:
         args: Tool arguments with optional dateFrom, dateTo, and maxResults.
-        client: Email client for searching and reading messages.
+        ctx: Handler context with client for searching and reading messages.
 
     Returns:
         MCP content with the parsed Itinerary as JSON.
@@ -58,7 +50,7 @@ def handle_extract_itinerary(args: dict[str, Any], client: EmailClient) -> dict[
     )
 
     try:
-        result = client.search_messages(q=query, max_results=max_results)
+        result = ctx.client.search_messages(q=query, max_results=max_results)
     except Exception as exc:
         return _error_content(f"Search failed: {exc}")
 
@@ -71,7 +63,7 @@ def handle_extract_itinerary(args: dict[str, Any], client: EmailClient) -> dict[
     messages: list[dict[str, Any]] = []
     for stub in stubs:
         try:
-            msg = client.read_message(stub["id"])
+            msg = ctx.client.read_message(stub["id"])
             messages.append(msg)
         except Exception:
             continue

@@ -7,6 +7,12 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from src.handler_context import HandlerContext
+
+
+def _ctx(client=None) -> HandlerContext:
+    return HandlerContext(client=client or MagicMock())
+
 
 def _make_payload(
     from_addr: str = "alice@example.com",
@@ -80,7 +86,7 @@ class TestHandleSummarizeThread:
         from src.tools.ai_context import handle_summarize_thread
 
         client = self._make_client([])
-        result = handle_summarize_thread({}, client)
+        result = handle_summarize_thread({}, _ctx(client))
         assert result["isError"] is True
         assert "threadId" in result["content"][0]["text"]
 
@@ -97,7 +103,7 @@ class TestHandleSummarizeThread:
             ),
         ]
         client = self._make_client(msgs)
-        result = handle_summarize_thread({"threadId": "t1"}, client)
+        result = handle_summarize_thread({"threadId": "t1"}, _ctx(client))
         assert not result.get("isError")
         data = json.loads(result["content"][0]["text"])
         assert data["message_count"] == 2
@@ -119,7 +125,7 @@ class TestHandleSummarizeThread:
             ),
         ]
         client = self._make_client(msgs)
-        result = handle_summarize_thread({"threadId": "t1"}, client)
+        result = handle_summarize_thread({"threadId": "t1"}, _ctx(client))
         data = json.loads(result["content"][0]["text"])
         assert len(data["key_asks"]) >= 1
         asks_lower = [a.lower() for a in data["key_asks"]]
@@ -137,7 +143,7 @@ class TestHandleSummarizeThread:
             ),
         ]
         client = self._make_client(msgs)
-        result = handle_summarize_thread({"threadId": "t1"}, client)
+        result = handle_summarize_thread({"threadId": "t1"}, _ctx(client))
         data = json.loads(result["content"][0]["text"])
         assert len(data["open_questions"]) >= 1
         assert any("?" in q for q in data["open_questions"])
@@ -154,7 +160,7 @@ class TestHandleSummarizeThread:
             ),
         ]
         client = self._make_client(msgs)
-        result = handle_summarize_thread({"threadId": "t1"}, client)
+        result = handle_summarize_thread({"threadId": "t1"}, _ctx(client))
         data = json.loads(result["content"][0]["text"])
         assert len(data["attachments"]) == 1
         assert data["attachments"][0]["filename"] == "report.pdf"
@@ -165,7 +171,7 @@ class TestHandleSummarizeThread:
         client = MagicMock()
         client.email_address = "me@gmail.com"
         client.read_thread.side_effect = RuntimeError("Thread not found")
-        result = handle_summarize_thread({"threadId": "t_missing"}, client)
+        result = handle_summarize_thread({"threadId": "t_missing"}, _ctx(client))
         assert result["isError"] is True
 
     def test_single_message_thread(self) -> None:
@@ -173,12 +179,13 @@ class TestHandleSummarizeThread:
 
         msgs = [
             _make_message(
-                msg_id="m1", from_addr="sender@example.com",
+                msg_id="m1",
+                from_addr="sender@example.com",
                 body_text="Just one message",
             ),
         ]
         client = self._make_client(msgs)
-        result = handle_summarize_thread({"threadId": "t1"}, client)
+        result = handle_summarize_thread({"threadId": "t1"}, _ctx(client))
         assert not result.get("isError")
         data = json.loads(result["content"][0]["text"])
         assert data["message_count"] == 1
@@ -194,7 +201,7 @@ class TestHandleSummarizeThread:
             ),
         ]
         client = self._make_client(msgs, email_address="me@gmail.com")
-        result = handle_summarize_thread({"threadId": "t1"}, client)
+        result = handle_summarize_thread({"threadId": "t1"}, _ctx(client))
         data = json.loads(result["content"][0]["text"])
         assert data["open_questions"] == []
 
@@ -244,7 +251,7 @@ class TestHandleNeedsReply:
             messages={"m1": msg},
             threads={"t1": {"messages": [msg]}},
         )
-        result = handle_needs_reply({}, client)
+        result = handle_needs_reply({}, _ctx(client))
         assert not result.get("isError")
         data = json.loads(result["content"][0]["text"])
         assert data["count"] >= 1
@@ -255,7 +262,7 @@ class TestHandleNeedsReply:
         client = MagicMock()
         client.email_address = "me@gmail.com"
         client.search_messages.return_value = {"messages": []}
-        result = handle_needs_reply({}, client)
+        result = handle_needs_reply({}, _ctx(client))
         assert not result.get("isError")
         assert "No unread inbox" in result["content"][0]["text"]
 
@@ -265,16 +272,13 @@ class TestHandleNeedsReply:
         client = MagicMock()
         client.email_address = "me@gmail.com"
         client.search_messages.return_value = {"messages": []}
-        handle_needs_reply({"daysBack": 14}, client)
+        handle_needs_reply({"daysBack": 14}, _ctx(client))
         call_args = client.search_messages.call_args
         assert "after:" in call_args.kwargs.get("q", call_args.args[0] if call_args.args else "")
 
     def test_skips_junk_senders(self) -> None:
         from src.tools.ai_context import handle_needs_reply
 
-        # Message is to me (1 reason) but junk=True means "Not junk" is not added.
-        # My reply is last in thread so "Last message not from you" is not added.
-        # No question or action keyword. Total reasons = 1 < 2 → does not qualify.
         msg = _make_message(
             msg_id="m1",
             thread_id="t1",
@@ -302,16 +306,13 @@ class TestHandleNeedsReply:
             junk_instance.analyze.return_value = junk_result
             MockJunk.return_value = junk_instance
 
-            result = handle_needs_reply({}, client)
+            result = handle_needs_reply({}, _ctx(client))
             data = json.loads(result["content"][0]["text"])
             assert data["count"] == 0
 
     def test_skips_when_last_reply_is_mine(self) -> None:
         from src.tools.ai_context import handle_needs_reply
 
-        # Message is NOT directly to me, no question, no action keyword.
-        # "Last message not from you" is absent (my reply is last).
-        # "Not junk" is the only reason → count=1 < 2 → does not qualify.
         first_msg = _make_message(
             msg_id="m1",
             thread_id="t1",
@@ -331,7 +332,7 @@ class TestHandleNeedsReply:
             messages={"m1": first_msg},
             threads={"t1": {"messages": [first_msg, my_reply]}},
         )
-        result = handle_needs_reply({}, client)
+        result = handle_needs_reply({}, _ctx(client))
         data = json.loads(result["content"][0]["text"])
         assert data["count"] == 0
 
@@ -341,5 +342,5 @@ class TestHandleNeedsReply:
         client = MagicMock()
         client.email_address = "me@gmail.com"
         client.search_messages.side_effect = RuntimeError("API error")
-        result = handle_needs_reply({}, client)
+        result = handle_needs_reply({}, _ctx(client))
         assert result["isError"] is True

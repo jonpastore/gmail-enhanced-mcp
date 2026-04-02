@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from src.handler_context import HandlerContext
 from src.triage.cache import TriageCache
 from src.triage.models import SenderTier
 
@@ -14,6 +15,10 @@ def _make_cache() -> TriageCache:
     cache = TriageCache(Path(":memory:"))
     cache.initialize()
     return cache
+
+
+def _ctx(client=None, cache=None) -> HandlerContext:
+    return HandlerContext(client=client or MagicMock(), cache=cache or _make_cache())
 
 
 def _make_message(
@@ -52,7 +57,7 @@ class TestHandleTriageInbox:
         }
         client.read_message.return_value = _make_message()
 
-        result = handle_triage_inbox({}, client, cache)
+        result = handle_triage_inbox({}, _ctx(client, cache))
 
         assert not result.get("isError")
         text = result["content"][0]["text"]
@@ -67,7 +72,7 @@ class TestHandleTriageInbox:
         client.email_address = "me@gmail.com"
         client.search_messages.return_value = {"messages": []}
 
-        result = handle_triage_inbox({}, client, cache)
+        result = handle_triage_inbox({}, _ctx(client, cache))
 
         assert "No messages found" in result["content"][0]["text"]
 
@@ -84,7 +89,7 @@ class TestHandleTriageInbox:
         ]
 
         with patch("src.tools.triage.time.sleep") as mock_sleep:
-            result = handle_triage_inbox({"maxResults": 15}, client, cache)
+            result = handle_triage_inbox({"maxResults": 15}, _ctx(client, cache))
 
         assert not result.get("isError")
         assert mock_sleep.call_count == 1
@@ -97,7 +102,7 @@ class TestHandleTriageInbox:
         client.email_address = "me@gmail.com"
         client.search_messages.return_value = {"messages": []}
 
-        handle_triage_inbox({"q": "is:unread"}, client, cache)
+        handle_triage_inbox({"q": "is:unread"}, _ctx(client, cache))
 
         client.search_messages.assert_called_once_with(q="is:unread", max_results=20)
 
@@ -109,7 +114,7 @@ class TestHandleTriageInbox:
         client.email_address = "me@gmail.com"
         client.search_messages.side_effect = RuntimeError("API down")
 
-        result = handle_triage_inbox({}, client, cache)
+        result = handle_triage_inbox({}, _ctx(client, cache))
 
         assert result["isError"] is True
         assert "RuntimeError" in result["content"][0]["text"]
@@ -123,7 +128,7 @@ class TestHandleAddPrioritySender:
         client = MagicMock()
         args = {"pattern": "*@irs.gov", "tier": "critical", "label": "Government"}
 
-        result = handle_add_priority_sender(args, client, cache)
+        result = handle_add_priority_sender(args, _ctx(client, cache))
 
         assert not result.get("isError")
         assert "*@irs.gov" in result["content"][0]["text"]
@@ -137,7 +142,7 @@ class TestHandleAddPrioritySender:
         cache = _make_cache()
         client = MagicMock()
 
-        result = handle_add_priority_sender({}, client, cache)
+        result = handle_add_priority_sender({}, _ctx(client, cache))
 
         assert result["isError"] is True
 
@@ -148,18 +153,17 @@ class TestHandleListPrioritySenders:
 
         cache = _make_cache()
         client = MagicMock()
+        ctx = _ctx(client, cache)
         handle_add_priority_sender(
             {"pattern": "*@irs.gov", "tier": "critical", "label": "Government"},
-            client,
-            cache,
+            ctx,
         )
         handle_add_priority_sender(
             {"pattern": "boss@work.com", "tier": "high", "label": "Boss"},
-            client,
-            cache,
+            ctx,
         )
 
-        result = handle_list_priority_senders({}, client, cache)
+        result = handle_list_priority_senders({}, ctx)
 
         text = result["content"][0]["text"]
         assert "CRITICAL" in text
@@ -173,7 +177,7 @@ class TestHandleListPrioritySenders:
         cache = _make_cache()
         client = MagicMock()
 
-        result = handle_list_priority_senders({}, client, cache)
+        result = handle_list_priority_senders({}, _ctx(client, cache))
 
         assert "No priority senders" in result["content"][0]["text"]
 
@@ -187,13 +191,13 @@ class TestHandleRemovePrioritySender:
 
         cache = _make_cache()
         client = MagicMock()
+        ctx = _ctx(client, cache)
         handle_add_priority_sender(
             {"pattern": "*@irs.gov", "tier": "critical", "label": "Gov"},
-            client,
-            cache,
+            ctx,
         )
 
-        result = handle_remove_priority_sender({"pattern": "*@irs.gov"}, client, cache)
+        result = handle_remove_priority_sender({"pattern": "*@irs.gov"}, ctx)
 
         assert not result.get("isError")
         assert "Removed" in result["content"][0]["text"]
@@ -204,7 +208,7 @@ class TestHandleRemovePrioritySender:
         cache = _make_cache()
         client = MagicMock()
 
-        result = handle_remove_priority_sender({"pattern": "nope@x.com"}, client, cache)
+        result = handle_remove_priority_sender({"pattern": "nope@x.com"}, _ctx(client, cache))
 
         assert "not found" in result["content"][0]["text"].lower()
 
@@ -218,7 +222,7 @@ class TestHandleTrackFollowup:
         client.email_address = "me@gmail.com"
         client.read_message.return_value = _make_message(msg_id="sent_001", subject="Please review")
 
-        result = handle_track_followup({"messageId": "sent_001"}, client, cache)
+        result = handle_track_followup({"messageId": "sent_001"}, _ctx(client, cache))
 
         assert not result.get("isError")
         assert "sent_001" in result["content"][0]["text"]
@@ -231,7 +235,9 @@ class TestHandleTrackFollowup:
         client.email_address = "me@gmail.com"
         client.read_message.return_value = _make_message(msg_id="sent_002")
 
-        result = handle_track_followup({"messageId": "sent_002", "expectedDays": 7}, client, cache)
+        result = handle_track_followup(
+            {"messageId": "sent_002", "expectedDays": 7}, _ctx(client, cache)
+        )
 
         assert not result.get("isError")
 
@@ -244,7 +250,7 @@ class TestHandleCheckFollowups:
         client = MagicMock()
         client.email_address = "me@gmail.com"
 
-        result = handle_check_followups({}, client, cache)
+        result = handle_check_followups({}, _ctx(client, cache))
 
         assert not result.get("isError")
         text = result["content"][0]["text"]
@@ -258,7 +264,7 @@ class TestHandleResetTriageCache:
         cache = _make_cache()
         client = MagicMock()
 
-        result = handle_reset_triage_cache({"confirm": False}, client, cache)
+        result = handle_reset_triage_cache({"confirm": False}, _ctx(client, cache))
 
         assert result["isError"] is True
         assert "confirm" in result["content"][0]["text"].lower()
@@ -269,7 +275,7 @@ class TestHandleResetTriageCache:
         cache = _make_cache()
         client = MagicMock()
 
-        result = handle_reset_triage_cache({"confirm": True}, client, cache)
+        result = handle_reset_triage_cache({"confirm": True}, _ctx(client, cache))
 
         assert not result.get("isError")
         assert "reset" in result["content"][0]["text"].lower()

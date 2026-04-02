@@ -6,6 +6,12 @@ import json
 from typing import Any
 from unittest.mock import MagicMock
 
+from src.handler_context import HandlerContext
+
+
+def _ctx(client=None) -> HandlerContext:
+    return HandlerContext(client=client or MagicMock())
+
 
 def _make_original_message(
     msg_id: str = "m1",
@@ -57,7 +63,7 @@ class TestHandleBatchReply:
                 {"messageId": "m2", "threadId": "t2", "body": "Sounds good Bob!"},
             ]
         }
-        result = handle_batch_reply(args, client)
+        result = handle_batch_reply(args, _ctx(client))
         assert not result.get("isError")
         data = json.loads(result["content"][0]["text"])
         assert data["drafts_created"] == 2
@@ -71,7 +77,7 @@ class TestHandleBatchReply:
         client.create_draft.return_value = {"id": "draft_abc"}
 
         args = {"replies": [{"messageId": "m1", "threadId": "t1", "body": "Reply body"}]}
-        result = handle_batch_reply(args, client)
+        result = handle_batch_reply(args, _ctx(client))
         data = json.loads(result["content"][0]["text"])
         assert "draft_abc" in data["draft_ids"]
 
@@ -79,11 +85,8 @@ class TestHandleBatchReply:
         from src.tools.batch_reply import handle_batch_reply
 
         client = MagicMock()
-        replies = [
-            {"messageId": f"m{i}", "threadId": f"t{i}", "body": "reply"}
-            for i in range(21)
-        ]
-        result = handle_batch_reply({"replies": replies}, client)
+        replies = [{"messageId": f"m{i}", "threadId": f"t{i}", "body": "reply"} for i in range(21)]
+        result = handle_batch_reply({"replies": replies}, _ctx(client))
         assert result["isError"] is True
         assert "20" in result["content"][0]["text"]
 
@@ -97,11 +100,8 @@ class TestHandleBatchReply:
         client = _make_client(messages)
         client.create_draft.return_value = {"id": "draft_x"}
 
-        replies = [
-            {"messageId": f"m{i}", "threadId": f"t{i}", "body": "reply"}
-            for i in range(20)
-        ]
-        result = handle_batch_reply({"replies": replies}, client)
+        replies = [{"messageId": f"m{i}", "threadId": f"t{i}", "body": "reply"} for i in range(20)]
+        result = handle_batch_reply({"replies": replies}, _ctx(client))
         assert not result.get("isError")
         data = json.loads(result["content"][0]["text"])
         assert data["drafts_created"] == 20
@@ -127,7 +127,7 @@ class TestHandleBatchReply:
                 {"messageId": "m2", "threadId": "t2", "body": "Sure"},
             ]
         }
-        result = handle_batch_reply(args, client)
+        result = handle_batch_reply(args, _ctx(client))
         data = json.loads(result["content"][0]["text"])
         assert data["drafts_created"] == 1
         assert len(data["errors"]) == 1
@@ -136,7 +136,7 @@ class TestHandleBatchReply:
         from src.tools.batch_reply import handle_batch_reply
 
         client = MagicMock()
-        result = handle_batch_reply({"replies": []}, client)
+        result = handle_batch_reply({"replies": []}, _ctx(client))
         assert result["isError"] is True
         assert "required" in result["content"][0]["text"].lower()
 
@@ -144,7 +144,7 @@ class TestHandleBatchReply:
         from src.tools.batch_reply import handle_batch_reply
 
         client = MagicMock()
-        result = handle_batch_reply({}, client)
+        result = handle_batch_reply({}, _ctx(client))
         assert result["isError"] is True
 
     def test_entry_missing_body_skipped_with_error(self) -> None:
@@ -158,7 +158,7 @@ class TestHandleBatchReply:
                 {"messageId": "m1", "threadId": "t1"},
             ]
         }
-        result = handle_batch_reply(args, client)
+        result = handle_batch_reply(args, _ctx(client))
         data = json.loads(result["content"][0]["text"])
         assert data["drafts_created"] == 0
         assert len(data["errors"]) == 1
@@ -180,7 +180,7 @@ class TestHandleBatchReply:
                 }
             ]
         }
-        handle_batch_reply(args, client)
+        handle_batch_reply(args, _ctx(client))
         call_kwargs = client.create_draft.call_args
         assert call_kwargs.kwargs.get("subject") == "Custom Subject"
 
@@ -192,7 +192,7 @@ class TestHandleBatchReply:
         client.create_draft.return_value = {"id": "draft_001"}
 
         args = {"replies": [{"messageId": "m1", "threadId": "t1", "body": "Reply"}]}
-        handle_batch_reply(args, client)
+        handle_batch_reply(args, _ctx(client))
         call_kwargs = client.create_draft.call_args
         assert call_kwargs.kwargs.get("subject") == "Re: Hello"
 
@@ -204,7 +204,7 @@ class TestHandleBatchReply:
         client.create_draft.return_value = {"id": "draft_001"}
 
         args = {"replies": [{"messageId": "m1", "threadId": "t1", "body": "Reply"}]}
-        handle_batch_reply(args, client)
+        handle_batch_reply(args, _ctx(client))
         call_kwargs = client.create_draft.call_args
         assert call_kwargs.kwargs.get("subject") == "Re: Hello"
 
@@ -215,7 +215,7 @@ class TestHandleBatchReply:
         client.read_message.side_effect = RuntimeError("Not found")
 
         args = {"replies": [{"messageId": "m_bad", "threadId": "t1", "body": "reply"}]}
-        result = handle_batch_reply(args, client)
+        result = handle_batch_reply(args, _ctx(client))
         data = json.loads(result["content"][0]["text"])
         assert data["drafts_created"] == 0
         assert len(data["errors"]) == 1

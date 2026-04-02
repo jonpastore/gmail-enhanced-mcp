@@ -6,24 +6,16 @@ import re
 from typing import Any
 
 from ..calendar.date_parser import DateParser
-from ..email_client import EmailClient
+from ..handler_context import HandlerContext
 from ..triage.engine import JunkDetector
+from .response import error_content as _error_content
+from .response import text_content as _text_content
 from .search import _extract_body, _get_header
 
 _ACTION_KEYWORDS = re.compile(
     r"\b(please|could you|can you|need you to|action required)\b",
     re.IGNORECASE,
 )
-
-
-def _text_content(text: str) -> dict[str, Any]:
-    """Return MCP-format text content."""
-    return {"content": [{"type": "text", "text": text}]}
-
-
-def _error_content(msg: str) -> dict[str, Any]:
-    """Return MCP-format error content."""
-    return {"content": [{"type": "text", "text": f"Error: {msg}"}], "isError": True}
 
 
 def _parse_name_email(raw: str) -> tuple[str, str]:
@@ -61,12 +53,12 @@ def _collect_attachments(payload: dict[str, Any]) -> list[dict[str, str]]:
     return attachments
 
 
-def handle_summarize_thread(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_summarize_thread(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Summarize a Gmail thread with participants, timeline, asks, and deadlines.
 
     Args:
         args: Tool arguments containing threadId.
-        client: Email client for reading thread data.
+        ctx: Handler context with client.
 
     Returns:
         MCP content with structured thread summary as JSON.
@@ -78,12 +70,12 @@ def handle_summarize_thread(args: dict[str, Any], client: EmailClient) -> dict[s
         return _error_content("threadId is required")
 
     try:
-        thread = client.read_thread(thread_id)
+        thread = ctx.client.read_thread(thread_id)
     except Exception as exc:
         return _error_content(f"Failed to read thread: {exc}")
 
     messages: list[dict[str, Any]] = thread.get("messages", [])
-    my_email = client.email_address.lower()
+    my_email = ctx.client.email_address.lower()
 
     participants: dict[str, dict[str, Any]] = {}
     timeline: list[dict[str, Any]] = []
@@ -211,12 +203,12 @@ def _qualifies_for_reply(
     return len(reasons) >= 2, reasons
 
 
-def handle_needs_reply(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_needs_reply(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Find inbox messages that likely need a reply from the user.
 
     Args:
         args: Tool arguments with optional maxResults and daysBack.
-        client: Email client for searching and reading messages.
+        ctx: Handler context with client.
 
     Returns:
         MCP content with list of messages needing reply, sorted by date desc.
@@ -232,7 +224,7 @@ def handle_needs_reply(args: dict[str, Any], client: EmailClient) -> dict[str, A
     query = f"is:inbox is:unread after:{after_str}"
 
     try:
-        result = client.search_messages(q=query, max_results=max_results)
+        result = ctx.client.search_messages(q=query, max_results=max_results)
     except Exception as exc:
         return _error_content(f"Search failed: {exc}")
 
@@ -240,14 +232,14 @@ def handle_needs_reply(args: dict[str, Any], client: EmailClient) -> dict[str, A
     if not stubs:
         return _text_content("No unread inbox messages found in the specified window.")
 
-    my_email = client.email_address.lower()
+    my_email = ctx.client.email_address.lower()
     junk_detector = JunkDetector()
     qualifying: list[dict[str, Any]] = []
 
     for stub in stubs:
         try:
-            msg = client.read_message(stub["id"])
-            thread = client.read_thread(stub.get("threadId", stub["id"]))
+            msg = ctx.client.read_message(stub["id"])
+            thread = ctx.client.read_thread(stub.get("threadId", stub["id"]))
         except Exception:
             continue
 

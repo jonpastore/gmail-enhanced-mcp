@@ -9,8 +9,8 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-from src.triage.cache import TriageCache
-from src.triage.models import (
+from .cache import TriageCache
+from .models import (
     ImportanceScore,
     JunkSignal,
     MessageCategory,

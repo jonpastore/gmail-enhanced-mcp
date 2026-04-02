@@ -7,8 +7,8 @@ from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Any
 
-from src.triage.cache import TriageCache
-from src.triage.models import FollowUp, FollowUpStatus
+from .cache import TriageCache
+from .models import FollowUp, FollowUpStatus
 
 _MONTH_MAP: dict[str, int] = {
     "january": 1,

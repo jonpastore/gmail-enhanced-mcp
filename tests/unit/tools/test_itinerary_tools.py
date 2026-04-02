@@ -8,6 +8,12 @@ from datetime import date, timedelta
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from src.handler_context import HandlerContext
+
+
+def _ctx(client=None) -> HandlerContext:
+    return HandlerContext(client=client or MagicMock())
+
 
 def _make_message(
     msg_id: str = "m1",
@@ -80,7 +86,7 @@ class TestHandleExtractItinerary:
             mock_parser.parse_messages.return_value = mock_itinerary
             MockParser.return_value = mock_parser
 
-            result = handle_extract_itinerary(args, client)
+            result = handle_extract_itinerary(args, _ctx(client))
 
         assert not result.get("isError")
         data = json.loads(result["content"][0]["text"])
@@ -92,7 +98,7 @@ class TestHandleExtractItinerary:
 
         client = MagicMock()
         args = {"dateFrom": "2026-06-01", "dateTo": "2026-05-01"}
-        result = handle_extract_itinerary(args, client)
+        result = handle_extract_itinerary(args, _ctx(client))
         assert result["isError"] is True
         assert "before" in result["content"][0]["text"].lower()
 
@@ -101,7 +107,7 @@ class TestHandleExtractItinerary:
 
         client = MagicMock()
         args = {"dateFrom": "2026-05-01", "dateTo": "2026-05-01"}
-        result = handle_extract_itinerary(args, client)
+        result = handle_extract_itinerary(args, _ctx(client))
         assert result["isError"] is True
 
     def test_invalid_date_format_returns_error(self) -> None:
@@ -109,7 +115,7 @@ class TestHandleExtractItinerary:
 
         client = MagicMock()
         args = {"dateFrom": "01/05/2026", "dateTo": "2026-06-01"}
-        result = handle_extract_itinerary(args, client)
+        result = handle_extract_itinerary(args, _ctx(client))
         assert result["isError"] is True
         assert "YYYY-MM-DD" in result["content"][0]["text"]
 
@@ -124,7 +130,7 @@ class TestHandleExtractItinerary:
             "dateFrom": today.isoformat(),
             "dateTo": (today + timedelta(days=10)).isoformat(),
         }
-        result = handle_extract_itinerary(args, client)
+        result = handle_extract_itinerary(args, _ctx(client))
         assert not result.get("isError")
         assert "No travel-related messages" in result["content"][0]["text"]
 
@@ -135,7 +141,7 @@ class TestHandleExtractItinerary:
         client.search_messages.return_value = {"messages": []}
 
         today = date.today()
-        handle_extract_itinerary({}, client)
+        handle_extract_itinerary({}, _ctx(client))
 
         call_kwargs = client.search_messages.call_args
         query = call_kwargs.kwargs.get("q", "")
@@ -155,7 +161,7 @@ class TestHandleExtractItinerary:
             "dateFrom": today.isoformat(),
             "dateTo": (today + timedelta(days=10)).isoformat(),
         }
-        result = handle_extract_itinerary(args, client)
+        result = handle_extract_itinerary(args, _ctx(client))
         assert result["isError"] is True
         assert "Search failed" in result["content"][0]["text"]
 
@@ -179,7 +185,7 @@ class TestHandleExtractItinerary:
             mock_parser.parse_messages.return_value = mock_itinerary
             MockParser.return_value = mock_parser
 
-            handle_extract_itinerary(args, client)
+            handle_extract_itinerary(args, _ctx(client))
 
             called_messages = mock_parser.parse_messages.call_args[0][0]
             assert len(called_messages) == 2
@@ -188,9 +194,7 @@ class TestHandleExtractItinerary:
         from src.tools.itinerary import handle_extract_itinerary
 
         client = MagicMock()
-        client.search_messages.return_value = {
-            "messages": [{"id": "m_bad"}, {"id": "m_good"}]
-        }
+        client.search_messages.return_value = {"messages": [{"id": "m_bad"}, {"id": "m_good"}]}
 
         good_msg = _make_message("m_good")
 
@@ -214,7 +218,7 @@ class TestHandleExtractItinerary:
             mock_parser.parse_messages.return_value = mock_itinerary
             MockParser.return_value = mock_parser
 
-            result = handle_extract_itinerary(args, client)
+            result = handle_extract_itinerary(args, _ctx(client))
             assert not result.get("isError")
             called_messages = mock_parser.parse_messages.call_args[0][0]
             assert len(called_messages) == 1

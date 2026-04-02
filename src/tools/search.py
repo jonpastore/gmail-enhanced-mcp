@@ -4,11 +4,8 @@ import base64
 import json
 from typing import Any
 
-from ..email_client import EmailClient
-
-
-def _text_content(text: str) -> dict[str, Any]:
-    return {"content": [{"type": "text", "text": text}]}
+from ..handler_context import HandlerContext
+from .response import text_content as _text_content
 
 
 def _get_header(headers: list[dict[str, str]], name: str) -> str:
@@ -87,13 +84,13 @@ def _format_message(msg: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def handle_get_profile(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
-    profile = client.get_profile()
+def handle_get_profile(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
+    profile = ctx.client.get_profile()
     return _text_content(json.dumps(profile, indent=2))
 
 
-def handle_search_messages(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
-    result = client.search_messages(
+def handle_search_messages(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
+    result = ctx.client.search_messages(
         q=args.get("q"),
         max_results=args.get("maxResults", 20),
         page_token=args.get("pageToken"),
@@ -110,19 +107,19 @@ def handle_search_messages(args: dict[str, Any], client: EmailClient) -> dict[st
     return _text_content("\n".join(lines))
 
 
-def handle_read_message(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_read_message(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     message_id = args.get("messageId")
     if not message_id:
         raise ValueError("messageId is required")
-    msg = client.read_message(message_id)
+    msg = ctx.client.read_message(message_id)
     return _text_content(_format_message(msg))
 
 
-def handle_read_thread(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_read_thread(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     thread_id = args.get("threadId")
     if not thread_id:
         raise ValueError("threadId is required")
-    thread = client.read_thread(thread_id)
+    thread = ctx.client.read_thread(thread_id)
     lines = [f"Thread: {thread['id']}", f"Messages: {len(thread['messages'])}", "---"]
     for msg in thread["messages"]:
         lines.append(_format_message(msg))

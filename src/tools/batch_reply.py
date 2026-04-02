@@ -4,30 +4,22 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..email_client import EmailClient
+from ..handler_context import HandlerContext
+from .response import error_content as _error_content
+from .response import text_content as _text_content
 from .search import _get_header
 
 _MAX_REPLIES = 20
 
 
-def _text_content(text: str) -> dict[str, Any]:
-    """Return MCP-format text content."""
-    return {"content": [{"type": "text", "text": text}]}
-
-
-def _error_content(msg: str) -> dict[str, Any]:
-    """Return MCP-format error content."""
-    return {"content": [{"type": "text", "text": f"Error: {msg}"}], "isError": True}
-
-
-def handle_batch_reply(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_batch_reply(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Create draft replies for multiple messages in a single call.
 
     Args:
         args: Tool arguments containing a ``replies`` list. Each entry must
             have ``messageId``, ``threadId``, and ``body``; ``subject`` is
             optional.
-        client: Email client for reading messages and creating drafts.
+        ctx: Handler context with client for reading messages and creating drafts.
 
     Returns:
         MCP content with counts of drafts created and any per-reply errors.
@@ -56,7 +48,7 @@ def handle_batch_reply(args: dict[str, Any], client: EmailClient) -> dict[str, A
             continue
 
         try:
-            original = client.read_message(message_id)
+            original = ctx.client.read_message(message_id)
         except Exception as exc:
             errors.append(f"Could not read message {message_id}: {exc}")
             continue
@@ -77,7 +69,7 @@ def handle_batch_reply(args: dict[str, Any], client: EmailClient) -> dict[str, A
         )
 
         try:
-            draft = client.create_draft(
+            draft = ctx.client.create_draft(
                 to=from_addr,
                 subject=reply_subject,
                 body=body,

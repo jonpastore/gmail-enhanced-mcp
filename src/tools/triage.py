@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from ..email_client import EmailClient
+from ..handler_context import HandlerContext
 from ..triage.cache import TriageCache
 from ..triage.engine import ImportanceScorer, JunkDetector
 from ..triage.models import (
@@ -16,6 +16,8 @@ from ..triage.models import (
 )
 from ..triage.priority_senders import PrioritySenderManager
 from ..triage.tracker import FollowUpTracker
+from .response import error_content as _error_content
+from .response import text_content as _text_content
 
 
 def _cache_message_metadata(cache: TriageCache, msg: dict[str, Any], account: str) -> None:
@@ -55,33 +57,21 @@ def _cache_message_metadata(cache: TriageCache, msg: dict[str, Any], account: st
     )
 
 
-def _text_content(text: str) -> dict[str, Any]:
-    """Return MCP-format text content."""
-    return {"content": [{"type": "text", "text": text}]}
-
-
-def _error_content(msg: str) -> dict[str, Any]:
-    """Return MCP-format error content."""
-    return {"content": [{"type": "text", "text": f"Error: {msg}"}], "isError": True}
-
-
-def handle_triage_inbox(
-    args: dict[str, Any], client: EmailClient, cache: TriageCache
-) -> dict[str, Any]:
+def handle_triage_inbox(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Score, detect junk, and suggest sorting for a batch of messages.
 
     Args:
         args: Tool arguments with optional q and maxResults.
-        client: Email client for searching/reading messages.
-        cache: Triage cache for scoring.
+        ctx: Handler context with client and cache.
 
     Returns:
         MCP content with scored results.
     """
+    assert ctx.cache is not None
     try:
         q = args.get("q")
         max_results = args.get("maxResults", 20)
-        search_result = client.search_messages(q=q, max_results=max_results)
+        search_result = ctx.client.search_messages(q=q, max_results=max_results)
         message_stubs = search_result.get("messages", [])
 
         if not message_stubs:
@@ -94,12 +84,12 @@ def handle_triage_inbox(
                 time.sleep(0.1)
             batch = message_stubs[i : i + batch_size]
             for stub in batch:
-                msg = client.read_message(stub["id"])
+                msg = ctx.client.read_message(stub["id"])
                 messages.append(msg)
 
-        scorer = ImportanceScorer(cache)
+        scorer = ImportanceScorer(ctx.cache)
         junk_detector = JunkDetector()
-        account = client.email_address
+        account = ctx.client.email_address
 
         scores = scorer.score_messages(messages, account)
         junk_flags = [junk_detector.analyze(msg) for msg in messages]
@@ -128,9 +118,9 @@ def handle_triage_inbox(
                 )
 
         for msg in messages:
-            _cache_message_metadata(cache, msg, account)
+            _cache_message_metadata(ctx.cache, msg, account)
         for sc in scores:
-            cache.store_score(sc)
+            ctx.cache.store_score(sc)
 
         lines: list[str] = [f"Triage Results ({len(scores)} messages):"]
         lines.append("")
@@ -153,19 +143,17 @@ def handle_triage_inbox(
         return _error_content(f"Triage operation failed: {type(exc).__name__}: {exc}")
 
 
-def handle_add_priority_sender(
-    args: dict[str, Any], client: EmailClient, cache: TriageCache
-) -> dict[str, Any]:
+def handle_add_priority_sender(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Add an email or domain pattern to the priority sender list.
 
     Args:
         args: Tool arguments with pattern, tier, and label.
-        client: Email client (unused but required by handler signature).
-        cache: Triage cache for persistence.
+        ctx: Handler context with cache for persistence.
 
     Returns:
         MCP content with confirmation.
     """
+    assert ctx.cache is not None
     try:
         pattern = args.get("pattern")
         tier_str = args.get("tier")
@@ -175,7 +163,7 @@ def handle_add_priority_sender(
             return _error_content("Missing required fields: pattern, tier, label")
 
         tier = SenderTier(tier_str)
-        manager = PrioritySenderManager(cache)
+        manager = PrioritySenderManager(ctx.cache)
         manager.add(pattern, tier, label)
 
         return _text_content(f"Added priority sender: {pattern} (tier={tier.value}, label={label})")
@@ -185,21 +173,19 @@ def handle_add_priority_sender(
         return _error_content(f"Triage operation failed: {type(exc).__name__}: {exc}")
 
 
-def handle_list_priority_senders(
-    args: dict[str, Any], client: EmailClient, cache: TriageCache
-) -> dict[str, Any]:
+def handle_list_priority_senders(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """List all priority sender patterns grouped by tier.
 
     Args:
         args: Tool arguments (none required).
-        client: Email client (unused but required by handler signature).
-        cache: Triage cache for persistence.
+        ctx: Handler context with cache for persistence.
 
     Returns:
         MCP content with grouped sender list.
     """
+    assert ctx.cache is not None
     try:
-        manager = PrioritySenderManager(cache)
+        manager = PrioritySenderManager(ctx.cache)
         senders = manager.list_all()
 
         if not senders:
@@ -225,22 +211,20 @@ def handle_list_priority_senders(
         return _error_content(f"Triage operation failed: {type(exc).__name__}: {exc}")
 
 
-def handle_remove_priority_sender(
-    args: dict[str, Any], client: EmailClient, cache: TriageCache
-) -> dict[str, Any]:
+def handle_remove_priority_sender(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Remove a priority sender pattern.
 
     Args:
         args: Tool arguments with pattern.
-        client: Email client (unused but required by handler signature).
-        cache: Triage cache for persistence.
+        ctx: Handler context with cache for persistence.
 
     Returns:
         MCP content with success/not-found message.
     """
+    assert ctx.cache is not None
     try:
         pattern = args.get("pattern", "")
-        manager = PrioritySenderManager(cache)
+        manager = PrioritySenderManager(ctx.cache)
         removed = manager.remove(pattern)
 
         if removed:
@@ -252,26 +236,24 @@ def handle_remove_priority_sender(
         return _error_content(f"Triage operation failed: {type(exc).__name__}: {exc}")
 
 
-def handle_track_followup(
-    args: dict[str, Any], client: EmailClient, cache: TriageCache
-) -> dict[str, Any]:
+def handle_track_followup(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Start tracking a sent message for follow-up replies.
 
     Args:
         args: Tool arguments with messageId and optional expectedDays.
-        client: Email client for reading the message.
-        cache: Triage cache for persistence.
+        ctx: Handler context with client and cache.
 
     Returns:
         MCP content with tracking confirmation.
     """
+    assert ctx.cache is not None
     try:
         message_id = args.get("messageId", "")
         expected_days = args.get("expectedDays", 3)
-        account = client.email_address
+        account = ctx.client.email_address
 
-        msg = client.read_message(message_id)
-        tracker = FollowUpTracker(cache)
+        msg = ctx.client.read_message(message_id)
+        tracker = FollowUpTracker(ctx.cache)
         follow_up = tracker.track(msg, account, expected_days=expected_days)
 
         lines = [
@@ -289,28 +271,26 @@ def handle_track_followup(
         return _error_content(f"Triage operation failed: {type(exc).__name__}: {exc}")
 
 
-def handle_check_followups(
-    args: dict[str, Any], client: EmailClient, cache: TriageCache
-) -> dict[str, Any]:
+def handle_check_followups(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Check all tracked follow-ups for replies, overdue items, and deadlines.
 
     Args:
         args: Tool arguments with optional flags.
-        client: Email client for checking thread replies.
-        cache: Triage cache for persistence.
+        ctx: Handler context with client and cache.
 
     Returns:
         MCP content with structured follow-up report.
     """
+    assert ctx.cache is not None
     try:
-        account = client.email_address
+        account = ctx.client.email_address
         include_overdue = args.get("includeOverdue", True)
         include_deadline = args.get("includeApproachingDeadline", True)
         within_days = args.get("withinDays", 2)
 
-        tracker = FollowUpTracker(cache)
+        tracker = FollowUpTracker(ctx.cache)
 
-        replied = tracker.check_replies(client, account)
+        replied = tracker.check_replies(ctx.client, account)
         lines = ["Follow-Up Report", ""]
 
         if replied:
@@ -355,24 +335,22 @@ def handle_check_followups(
         return _error_content(f"Triage operation failed: {type(exc).__name__}: {exc}")
 
 
-def handle_reset_triage_cache(
-    args: dict[str, Any], client: EmailClient, cache: TriageCache
-) -> dict[str, Any]:
+def handle_reset_triage_cache(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Reset the triage cache. Requires confirm=true.
 
     Args:
         args: Tool arguments with confirm boolean.
-        client: Email client (unused but required by handler signature).
-        cache: Triage cache to reset.
+        ctx: Handler context with cache to reset.
 
     Returns:
         MCP content with confirmation or error.
     """
+    assert ctx.cache is not None
     try:
         if not args.get("confirm"):
             return _error_content("Must set confirm=true to reset triage cache.")
 
-        cache.reset()
+        ctx.cache.reset()
         return _text_content("Triage cache has been reset. All cached data deleted.")
     except GmailMCPError:
         raise

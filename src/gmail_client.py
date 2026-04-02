@@ -387,9 +387,7 @@ class GmailClient(EmailClient):
                 "addLabelIds": ["TRASH"],
             },
         }
-        created = svc.users().settings().filters().create(
-            userId="me", body=filter_body
-        ).execute()
+        created = svc.users().settings().filters().create(userId="me", body=filter_body).execute()
         filter_id = created.get("id", "")
         logger.info(f"Created block filter for {sender}: {filter_id}")
         trash_result = self.trash_by_query(f"from:{sender}")
@@ -451,10 +449,12 @@ class GmailClient(EmailClient):
                     continue
                 names = person.get("names", [])
                 name = names[0].get("displayName", "Unknown") if names else "Unknown"
-                contacts.append({
-                    "name": name,
-                    "emails": [e["value"] for e in emails],
-                })
+                contacts.append(
+                    {
+                        "name": name,
+                        "emails": [e["value"] for e in emails],
+                    }
+                )
             next_page = result.get("nextPageToken")
             if not next_page:
                 break
@@ -473,10 +473,17 @@ class GmailClient(EmailClient):
         import re
 
         svc = self._get_service()
-        msg = svc.users().messages().get(
-            userId="me", id=message_id, format="metadata",
-            metadataHeaders=["List-Unsubscribe"],
-        ).execute()
+        msg = (
+            svc.users()
+            .messages()
+            .get(
+                userId="me",
+                id=message_id,
+                format="metadata",
+                metadataHeaders=["List-Unsubscribe"],
+            )
+            .execute()
+        )
         headers = msg.get("payload", {}).get("headers", [])
         unsub_header = ""
         for h in headers:

@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.handler_context import HandlerContext
 from src.tools.search import (
     handle_get_profile,
     handle_read_message,
@@ -13,11 +14,15 @@ from src.tools.search import (
 )
 
 
+def _ctx(client: Any = None) -> HandlerContext:
+    return HandlerContext(client=client or MagicMock())
+
+
 class TestGetProfile:
     def test_returns_profile_as_text_content(self, sample_profile: dict[str, Any]) -> None:
         mock_client = MagicMock()
         mock_client.get_profile.return_value = sample_profile
-        result = handle_get_profile({}, mock_client)
+        result = handle_get_profile({}, _ctx(mock_client))
         assert result["content"][0]["type"] == "text"
         assert "jpastore79@gmail.com" in result["content"][0]["text"]
 
@@ -30,7 +35,7 @@ class TestSearchMessages:
             "nextPageToken": None,
             "resultSizeEstimate": 1,
         }
-        result = handle_search_messages({"q": "from:test@example.com"}, mock_client)
+        result = handle_search_messages({"q": "from:test@example.com"}, _ctx(mock_client))
         assert "m1" in result["content"][0]["text"]
 
     def test_empty_results(self) -> None:
@@ -40,7 +45,7 @@ class TestSearchMessages:
             "nextPageToken": None,
             "resultSizeEstimate": 0,
         }
-        result = handle_search_messages({"q": "nonexistent"}, mock_client)
+        result = handle_search_messages({"q": "nonexistent"}, _ctx(mock_client))
         assert "No messages found" in result["content"][0]["text"]
 
 
@@ -48,26 +53,24 @@ class TestReadMessage:
     def test_returns_formatted_message(self, sample_message: dict[str, Any]) -> None:
         mock_client = MagicMock()
         mock_client.read_message.return_value = sample_message
-        result = handle_read_message({"messageId": "msg_001"}, mock_client)
+        result = handle_read_message({"messageId": "msg_001"}, _ctx(mock_client))
         text = result["content"][0]["text"]
         assert "sender@example.com" in text
         assert "Test Email" in text
 
     def test_missing_message_id_raises(self) -> None:
-        mock_client = MagicMock()
         with pytest.raises(ValueError, match="messageId is required"):
-            handle_read_message({}, mock_client)
+            handle_read_message({}, _ctx())
 
 
 class TestReadThread:
     def test_returns_thread_messages(self, sample_thread: dict[str, Any]) -> None:
         mock_client = MagicMock()
         mock_client.read_thread.return_value = sample_thread
-        result = handle_read_thread({"threadId": "thread_001"}, mock_client)
+        result = handle_read_thread({"threadId": "thread_001"}, _ctx(mock_client))
         text = result["content"][0]["text"]
         assert "thread_001" in text
 
     def test_missing_thread_id_raises(self) -> None:
-        mock_client = MagicMock()
         with pytest.raises(ValueError, match="threadId is required"):
-            handle_read_thread({}, mock_client)
+            handle_read_thread({}, _ctx())

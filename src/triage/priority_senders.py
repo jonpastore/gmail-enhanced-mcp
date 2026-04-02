@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from src.triage.cache import TriageCache
-from src.triage.models import PrioritySender, SenderTier
+from .cache import TriageCache
+from .models import PrioritySender, SenderTier
 
 
 class PrioritySenderManager:

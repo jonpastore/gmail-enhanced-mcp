@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from src.triage.models import (
+from .models import (
     FollowUp,
     FollowUpStatus,
     ImportanceScore,
@@ -379,7 +379,9 @@ class TriageCache:
         rows = self._execute_read(
             "SELECT email_pattern, dismissed_at FROM dismissed_contacts ORDER BY dismissed_at DESC"
         )
-        return [{"email_pattern": r["email_pattern"], "dismissed_at": r["dismissed_at"]} for r in rows]
+        return [
+            {"email_pattern": r["email_pattern"], "dismissed_at": r["dismissed_at"]} for r in rows
+        ]
 
     # -- Maintenance --
 

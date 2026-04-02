@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
 from src.calendar.context import CalendarEvent
+from src.handler_context import HandlerContext
 from src.triage.cache import TriageCache
 
 tz = ZoneInfo("America/New_York")
@@ -18,6 +19,14 @@ def _make_cache() -> TriageCache:
     cache = TriageCache(Path(":memory:"))
     cache.initialize()
     return cache
+
+
+def _ctx(client=None, calendar_ctx=None, cache=None) -> HandlerContext:
+    return HandlerContext(
+        client=client or MagicMock(),
+        cache=cache or _make_cache(),
+        calendar_ctx=calendar_ctx,
+    )
 
 
 def _make_event(
@@ -76,10 +85,9 @@ class TestHandleCheckEmailConflicts:
 
         client = MagicMock()
         client.search_messages.return_value = {"messages": []}
-        ctx = _make_calendar_ctx()
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx()
 
-        result = handle_check_email_conflicts({}, client, ctx, cache)
+        result = handle_check_email_conflicts({}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         assert "No messages" in result["content"][0]["text"]
@@ -95,11 +103,10 @@ class TestHandleCheckEmailConflicts:
             snippet="Let's meet tomorrow at the office",
         )
         event = _make_event(summary="Existing Standup")
-        ctx = _make_calendar_ctx(events=[event])
-        ctx.get_events_for_date.return_value = [event]
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx(events=[event])
+        cal_ctx.get_events_for_date.return_value = [event]
 
-        result = handle_check_email_conflicts({"daysAhead": 7}, client, ctx, cache)
+        result = handle_check_email_conflicts({"daysAhead": 7}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         text = result["content"][0]["text"]
@@ -115,11 +122,10 @@ class TestHandleCheckEmailConflicts:
             subject="Hello there",
             snippet="No dates mentioned here",
         )
-        ctx = _make_calendar_ctx(events=[])
-        ctx.get_events_for_date.return_value = []
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx(events=[])
+        cal_ctx.get_events_for_date.return_value = []
 
-        result = handle_check_email_conflicts({}, client, ctx, cache)
+        result = handle_check_email_conflicts({}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         assert "No scheduling conflicts" in result["content"][0]["text"]
@@ -129,10 +135,9 @@ class TestHandleCheckEmailConflicts:
 
         client = MagicMock()
         client.search_messages.side_effect = RuntimeError("API down")
-        ctx = _make_calendar_ctx()
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx()
 
-        result = handle_check_email_conflicts({}, client, ctx, cache)
+        result = handle_check_email_conflicts({}, _ctx(client, cal_ctx))
 
         assert result["isError"] is True
         assert "RuntimeError" in result["content"][0]["text"]
@@ -142,12 +147,19 @@ class TestHandleCheckEmailConflicts:
 
         client = MagicMock()
         client.search_messages.return_value = {"messages": []}
-        ctx = _make_calendar_ctx()
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx()
 
-        handle_check_email_conflicts({"q": "invoice", "maxResults": 5}, client, ctx, cache)
+        handle_check_email_conflicts({"q": "invoice", "maxResults": 5}, _ctx(client, cal_ctx))
 
         client.search_messages.assert_called_once_with(q="invoice", max_results=5)
+
+    def test_no_calendar_ctx_returns_error(self) -> None:
+        from src.tools.calendar import handle_check_email_conflicts
+
+        client = MagicMock()
+        result = handle_check_email_conflicts({}, _ctx(client, None))
+        assert result["isError"] is True
+        assert "Calendar not configured" in result["content"][0]["text"]
 
 
 class TestHandleMeetingPrep:
@@ -155,10 +167,9 @@ class TestHandleMeetingPrep:
         from src.tools.calendar import handle_meeting_prep
 
         client = MagicMock()
-        ctx = _make_calendar_ctx(events=[])
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx(events=[])
 
-        result = handle_meeting_prep({}, client, ctx, cache)
+        result = handle_meeting_prep({}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         assert "No meetings found today" in result["content"][0]["text"]
@@ -173,11 +184,10 @@ class TestHandleMeetingPrep:
             attendees=["alice@example.com"],
             start_offset_hours=1.0,
         )
-        ctx = _make_calendar_ctx(events=[event])
+        cal_ctx = _make_calendar_ctx(events=[event])
         client.search_messages.return_value = {"messages": [{"id": "m1", "threadId": "t1"}]}
-        cache = _make_cache()
 
-        result = handle_meeting_prep({"hoursAhead": 4}, client, ctx, cache)
+        result = handle_meeting_prep({"hoursAhead": 4}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         text = result["content"][0]["text"]
@@ -193,10 +203,9 @@ class TestHandleMeetingPrep:
             summary="Far Future Meeting",
             start_offset_hours=10.0,
         )
-        ctx = _make_calendar_ctx(events=[event])
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx(events=[event])
 
-        result = handle_meeting_prep({"hoursAhead": 2}, client, ctx, cache)
+        result = handle_meeting_prep({"hoursAhead": 2}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         assert "No meetings in the next" in result["content"][0]["text"]
@@ -206,10 +215,9 @@ class TestHandleMeetingPrep:
 
         client = MagicMock()
         event = _make_event(event_id="evt_real")
-        ctx = _make_calendar_ctx(events=[event])
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx(events=[event])
 
-        result = handle_meeting_prep({"eventId": "evt_missing"}, client, ctx, cache)
+        result = handle_meeting_prep({"eventId": "evt_missing"}, _ctx(client, cal_ctx))
 
         assert result["isError"] is True
         assert "evt_missing" in result["content"][0]["text"]
@@ -224,10 +232,9 @@ class TestHandleMeetingPrep:
             start_offset_hours=1.0,
             is_all_day=True,
         )
-        ctx = _make_calendar_ctx(events=[event])
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx(events=[event])
 
-        result = handle_meeting_prep({"hoursAhead": 4}, client, ctx, cache)
+        result = handle_meeting_prep({"hoursAhead": 4}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         assert "No meetings in the next" in result["content"][0]["text"]
@@ -236,14 +243,21 @@ class TestHandleMeetingPrep:
         from src.tools.calendar import handle_meeting_prep
 
         client = MagicMock()
-        ctx = MagicMock()
-        ctx.get_today_events.side_effect = RuntimeError("calendar error")
-        cache = _make_cache()
+        cal_ctx = MagicMock()
+        cal_ctx.get_today_events.side_effect = RuntimeError("calendar error")
 
-        result = handle_meeting_prep({}, client, ctx, cache)
+        result = handle_meeting_prep({}, _ctx(client, cal_ctx))
 
         assert result["isError"] is True
         assert "RuntimeError" in result["content"][0]["text"]
+
+    def test_no_calendar_ctx_returns_error(self) -> None:
+        from src.tools.calendar import handle_meeting_prep
+
+        client = MagicMock()
+        result = handle_meeting_prep({}, _ctx(client, None))
+        assert result["isError"] is True
+        assert "Calendar not configured" in result["content"][0]["text"]
 
 
 class TestHandleTodayBriefing:
@@ -254,10 +268,9 @@ class TestHandleTodayBriefing:
         client.email_address = "me@gmail.com"
         client.search_messages.return_value = {"messages": []}
         event = _make_event(summary="Morning Sync")
-        ctx = _make_calendar_ctx(events=[event])
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx(events=[event])
 
-        result = handle_today_briefing({"includeCalendar": True}, client, ctx, cache)
+        result = handle_today_briefing({"includeCalendar": True}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         text = result["content"][0]["text"]
@@ -270,10 +283,9 @@ class TestHandleTodayBriefing:
         client = MagicMock()
         client.email_address = "me@gmail.com"
         client.search_messages.return_value = {"messages": []}
-        ctx = _make_calendar_ctx(events=[])
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx(events=[])
 
-        result = handle_today_briefing({}, client, ctx, cache)
+        result = handle_today_briefing({}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         text = result["content"][0]["text"]
@@ -285,10 +297,9 @@ class TestHandleTodayBriefing:
         client = MagicMock()
         client.email_address = "me@gmail.com"
         client.search_messages.return_value = {"messages": []}
-        ctx = _make_calendar_ctx(events=[_make_event(summary="Hidden Meeting")])
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx(events=[_make_event(summary="Hidden Meeting")])
 
-        result = handle_today_briefing({"includeCalendar": False}, client, ctx, cache)
+        result = handle_today_briefing({"includeCalendar": False}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         text = result["content"][0]["text"]
@@ -302,10 +313,9 @@ class TestHandleTodayBriefing:
         client.email_address = "me@gmail.com"
         client.search_messages.return_value = {"messages": []}
         event = _make_event(summary="Company Holiday", is_all_day=True)
-        ctx = _make_calendar_ctx(events=[event])
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx(events=[event])
 
-        result = handle_today_briefing({"includeCalendar": True}, client, ctx, cache)
+        result = handle_today_briefing({"includeCalendar": True}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         text = result["content"][0]["text"]
@@ -318,10 +328,9 @@ class TestHandleTodayBriefing:
         client = MagicMock()
         client.email_address = "me@gmail.com"
         client.search_messages.return_value = {"messages": []}
-        ctx = _make_calendar_ctx(events=[])
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx(events=[])
 
-        result = handle_today_briefing({"includeCalendar": True}, client, ctx, cache)
+        result = handle_today_briefing({"includeCalendar": True}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         assert "No events today" in result["content"][0]["text"]
@@ -346,10 +355,9 @@ class TestHandleTodayBriefing:
                 "parts": [{"mimeType": "text/plain", "body": {"data": ""}}],
             },
         }
-        ctx = _make_calendar_ctx(events=[])
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx(events=[])
 
-        result = handle_today_briefing({}, client, ctx, cache)
+        result = handle_today_briefing({}, _ctx(client, cal_ctx))
 
         assert not result.get("isError")
         text = result["content"][0]["text"]
@@ -361,10 +369,18 @@ class TestHandleTodayBriefing:
         client = MagicMock()
         client.email_address = "me@gmail.com"
         client.search_messages.side_effect = RuntimeError("API failure")
-        ctx = _make_calendar_ctx()
-        cache = _make_cache()
+        cal_ctx = _make_calendar_ctx()
 
-        result = handle_today_briefing({}, client, ctx, cache)
+        result = handle_today_briefing({}, _ctx(client, cal_ctx))
 
         assert result["isError"] is True
         assert "RuntimeError" in result["content"][0]["text"]
+
+    def test_no_calendar_ctx_returns_error(self) -> None:
+        from src.tools.calendar import handle_today_briefing
+
+        client = MagicMock()
+        client.email_address = "me@gmail.com"
+        result = handle_today_briefing({}, _ctx(client, None))
+        assert result["isError"] is True
+        assert "Calendar not configured" in result["content"][0]["text"]

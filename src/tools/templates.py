@@ -5,13 +5,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ..email_client import EmailClient
+from ..handler_context import HandlerContext
+from .response import text_content as _text_content
 
 DEFAULT_TEMPLATE_DIR = Path("templates")
-
-
-def _text_content(text: str) -> dict[str, Any]:
-    return {"content": [{"type": "text", "text": text}]}
 
 
 def _find_placeholders(text: str) -> set[str]:
@@ -20,7 +17,7 @@ def _find_placeholders(text: str) -> set[str]:
 
 def handle_save_template(
     args: dict[str, Any],
-    client: EmailClient,
+    ctx: HandlerContext,
     template_dir: Path = DEFAULT_TEMPLATE_DIR,
 ) -> dict[str, Any]:
     name = args.get("name")
@@ -54,7 +51,7 @@ def handle_save_template(
 
 def handle_use_template(
     args: dict[str, Any],
-    client: EmailClient,
+    ctx: HandlerContext,
     template_dir: Path = DEFAULT_TEMPLATE_DIR,
 ) -> dict[str, Any]:
     name = args.get("name")
@@ -79,7 +76,7 @@ def handle_use_template(
         subject = subject.replace(f"{{{{{key}}}}}", value)
         body = body.replace(f"{{{{{key}}}}}", value)
 
-    result = client.create_draft(
+    result = ctx.client.create_draft(
         to=args.get("to"),
         subject=subject,
         body=body,

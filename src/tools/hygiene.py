@@ -5,27 +5,21 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from loguru import logger
-
-from ..email_client import EmailClient
-from ..triage.cache import TriageCache
+from ..handler_context import HandlerContext
 from ..triage.models import SenderTier
 from ..triage.priority_senders import PrioritySenderManager
+from .response import text_content as _text_content
 
 
-def _text_content(text: str) -> dict[str, Any]:
-    return {"content": [{"type": "text", "text": text}]}
-
-
-def _gmail_only(client: EmailClient) -> dict[str, Any] | None:
+def _gmail_only(client: Any) -> dict[str, Any] | None:
     if client.provider != "gmail":
         return _text_content("This tool is only available for Gmail accounts.")
     return None
 
 
-def handle_trash_messages(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_trash_messages(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Trash messages by IDs or search query."""
-    guard = _gmail_only(client)
+    guard = _gmail_only(ctx.client)
     if guard:
         return guard
 
@@ -36,10 +30,11 @@ def handle_trash_messages(args: dict[str, Any], client: EmailClient) -> dict[str
         return _text_content("Provide messageIds or query to identify messages to trash.")
 
     if message_ids:
-        result = client.trash_messages(message_ids)  # type: ignore[attr-defined]
+        result = ctx.client.trash_messages(message_ids)
     else:
+        assert query is not None
         max_results = args.get("maxResults", 500)
-        result = client.trash_by_query(query, max_results)  # type: ignore[attr-defined]
+        result = ctx.client.trash_by_query(query, max_results)
 
     count = result["trashed_count"]
     ids_preview = json.dumps(result["message_ids"][:20])
@@ -49,9 +44,9 @@ def handle_trash_messages(args: dict[str, Any], client: EmailClient) -> dict[str
     return _text_content(text)
 
 
-def handle_block_sender(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_block_sender(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Block a sender: create auto-delete filter + trash existing."""
-    guard = _gmail_only(client)
+    guard = _gmail_only(ctx.client)
     if guard:
         return guard
 
@@ -59,7 +54,7 @@ def handle_block_sender(args: dict[str, Any], client: EmailClient) -> dict[str, 
     if not sender:
         return _text_content("sender is required.")
 
-    result = client.create_block_filter(sender)  # type: ignore[attr-defined]
+    result = ctx.client.create_block_filter(sender)
     return _text_content(
         f"Blocked {sender}.\n"
         f"Filter ID: {result['filter_id']}\n"
@@ -67,9 +62,9 @@ def handle_block_sender(args: dict[str, Any], client: EmailClient) -> dict[str, 
     )
 
 
-def handle_report_spam(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_report_spam(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Report messages as spam."""
-    guard = _gmail_only(client)
+    guard = _gmail_only(ctx.client)
     if guard:
         return guard
 
@@ -77,18 +72,18 @@ def handle_report_spam(args: dict[str, Any], client: EmailClient) -> dict[str, A
     if not message_ids:
         return _text_content("messageIds is required.")
 
-    result = client.report_spam(message_ids)  # type: ignore[attr-defined]
+    result = ctx.client.report_spam(message_ids)
     return _text_content(f"Reported {result['reported_count']} messages as spam.")
 
 
-def handle_list_contacts(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_list_contacts(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """List Google contacts with email addresses."""
-    guard = _gmail_only(client)
+    guard = _gmail_only(ctx.client)
     if guard:
         return guard
 
     max_results = args.get("maxResults", 2000)
-    contacts = client.get_contacts(max_results)  # type: ignore[attr-defined]
+    contacts = ctx.client.get_contacts(max_results)
     if not contacts:
         return _text_content("No contacts with email addresses found.")
 
@@ -99,25 +94,24 @@ def handle_list_contacts(args: dict[str, Any], client: EmailClient) -> dict[str,
     return _text_content("\n".join(lines))
 
 
-def handle_import_contacts_as_priority(
-    args: dict[str, Any], client: EmailClient, cache: TriageCache
-) -> dict[str, Any]:
+def handle_import_contacts_as_priority(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Import Google contacts as priority senders."""
-    guard = _gmail_only(client)
+    guard = _gmail_only(ctx.client)
     if guard:
         return guard
 
+    assert ctx.cache is not None
     tier_str = args.get("tier", "normal")
     try:
         tier = SenderTier(tier_str)
     except ValueError:
         return _text_content(f"Invalid tier: {tier_str}. Use critical, high, or normal.")
 
-    contacts = client.get_contacts()  # type: ignore[attr-defined]
+    contacts = ctx.client.get_contacts()
     if not contacts:
         return _text_content("No contacts with email addresses found.")
 
-    mgr = PrioritySenderManager(cache)
+    mgr = PrioritySenderManager(ctx.cache)
     added = 0
     skipped = 0
     for contact in contacts:
@@ -137,11 +131,9 @@ def handle_import_contacts_as_priority(
     )
 
 
-def handle_get_unsubscribe_link(
-    args: dict[str, Any], client: EmailClient
-) -> dict[str, Any]:
+def handle_get_unsubscribe_link(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Extract unsubscribe link from a message."""
-    guard = _gmail_only(client)
+    guard = _gmail_only(ctx.client)
     if guard:
         return guard
 
@@ -149,7 +141,7 @@ def handle_get_unsubscribe_link(
     if not message_id:
         return _text_content("messageId is required.")
 
-    result = client.extract_unsubscribe_link(message_id)  # type: ignore[attr-defined]
+    result = ctx.client.extract_unsubscribe_link(message_id)
     if not result["found"]:
         return _text_content("No unsubscribe link found in this message.")
 
@@ -161,9 +153,9 @@ def handle_get_unsubscribe_link(
     return _text_content("\n".join(lines))
 
 
-def handle_create_label(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_create_label(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Create a new Gmail label."""
-    guard = _gmail_only(client)
+    guard = _gmail_only(ctx.client)
     if guard:
         return guard
 
@@ -171,35 +163,33 @@ def handle_create_label(args: dict[str, Any], client: EmailClient) -> dict[str, 
     if not name:
         return _text_content("name is required.")
 
-    result = client.create_label(name)  # type: ignore[attr-defined]
+    result = ctx.client.create_label(name)
     return _text_content(f"Created label: {result['name']} (ID: {result['id']})")
 
 
-def handle_dismiss_contact(
-    args: dict[str, Any], client: EmailClient, cache: TriageCache
-) -> dict[str, Any]:
+def handle_dismiss_contact(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Dismiss a contact pattern from future resync."""
-    guard = _gmail_only(client)
+    guard = _gmail_only(ctx.client)
     if guard:
         return guard
 
+    assert ctx.cache is not None
     pattern = args.get("pattern")
     if not pattern:
         return _text_content("pattern is required.")
 
-    cache.dismiss_contact(pattern)
+    ctx.cache.dismiss_contact(pattern)
     return _text_content(f"Dismissed {pattern}. It will not be re-added on resync.")
 
 
-def handle_list_dismissed_contacts(
-    args: dict[str, Any], client: EmailClient, cache: TriageCache
-) -> dict[str, Any]:
+def handle_list_dismissed_contacts(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """List dismissed contact patterns."""
-    guard = _gmail_only(client)
+    guard = _gmail_only(ctx.client)
     if guard:
         return guard
 
-    dismissed = cache.get_dismissed_contacts()
+    assert ctx.cache is not None
+    dismissed = ctx.cache.get_dismissed_contacts()
     if not dismissed:
         return _text_content("No dismissed contacts.")
 

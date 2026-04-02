@@ -2,18 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..email_client import EmailClient
+from ..handler_context import HandlerContext
+from .response import text_content as _text_content
 
 
-def _text_content(text: str) -> dict[str, Any]:
-    return {"content": [{"type": "text", "text": text}]}
-
-
-def handle_create_draft(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_create_draft(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     body = args.get("body")
     if not body:
         raise ValueError("body is required")
-    result = client.create_draft(
+    result = ctx.client.create_draft(
         to=args.get("to"),
         subject=args.get("subject"),
         body=body,
@@ -30,11 +27,11 @@ def handle_create_draft(args: dict[str, Any], client: EmailClient) -> dict[str, 
     )
 
 
-def handle_update_draft(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_update_draft(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     draft_id = args.get("draftId")
     if not draft_id:
         raise ValueError("draftId is required")
-    result = client.update_draft(
+    result = ctx.client.update_draft(
         draft_id=draft_id,
         to=args.get("to"),
         subject=args.get("subject"),
@@ -47,8 +44,8 @@ def handle_update_draft(args: dict[str, Any], client: EmailClient) -> dict[str, 
     return _text_content(f"Draft updated.\nDraft ID: {result['id']}")
 
 
-def handle_list_drafts(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
-    result = client.list_drafts(
+def handle_list_drafts(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
+    result = ctx.client.list_drafts(
         max_results=args.get("maxResults", 20), page_token=args.get("pageToken")
     )
     drafts = result["drafts"]
@@ -62,11 +59,11 @@ def handle_list_drafts(args: dict[str, Any], client: EmailClient) -> dict[str, A
     return _text_content("\n".join(lines))
 
 
-def handle_send_draft(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_send_draft(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     draft_id = args.get("draftId")
     if not draft_id:
         raise ValueError("draftId is required")
-    result = client.send_draft(draft_id)
+    result = ctx.client.send_draft(draft_id)
     return _text_content(
         f"Draft sent successfully.\nMessage ID: {result['id']}\n"
         f"Labels: {', '.join(result.get('labelIds', []))}"

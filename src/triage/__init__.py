@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from src.triage.cache import TriageCache
-from src.triage.engine import ImportanceScorer, JunkDetector
-from src.triage.models import (
+from .cache import TriageCache
+from .engine import ImportanceScorer, JunkDetector
+from .models import (
     AutoSortProposal,
     FollowUp,
     FollowUpStatus,
@@ -18,8 +18,8 @@ from src.triage.models import (
     SyncState,
     TriageResult,
 )
-from src.triage.priority_senders import PrioritySenderManager
-from src.triage.tracker import DeadlineExtractor, FollowUpTracker
+from .priority_senders import PrioritySenderManager
+from .tracker import DeadlineExtractor, FollowUpTracker
 
 __all__ = [
     "AutoSortProposal",

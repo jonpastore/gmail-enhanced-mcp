@@ -6,7 +6,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.handler_context import HandlerContext
 from src.tools.templates import handle_save_template, handle_use_template
+
+
+def _ctx(client=None) -> HandlerContext:
+    return HandlerContext(client=client or MagicMock())
 
 
 class TestSaveTemplate:
@@ -19,7 +24,7 @@ class TestSaveTemplate:
                 "contentType": "text/plain",
                 "variables": ["name", "order_id"],
             },
-            MagicMock(),
+            _ctx(),
             template_dir=tmp_template_dir,
         )
         assert "saved" in result["content"][0]["text"].lower()
@@ -29,7 +34,7 @@ class TestSaveTemplate:
 
     def test_name_required(self, tmp_template_dir: Path) -> None:
         with pytest.raises(ValueError, match="name is required"):
-            handle_save_template({"body": "test"}, MagicMock(), template_dir=tmp_template_dir)
+            handle_save_template({"body": "test"}, _ctx(), template_dir=tmp_template_dir)
 
     def test_validates_placeholders_match_variables(self, tmp_template_dir: Path) -> None:
         with pytest.raises(ValueError, match="not declared in variables"):
@@ -40,7 +45,7 @@ class TestSaveTemplate:
                     "body": "Dear {{name}}, {{missing_var}}",
                     "variables": ["name"],
                 },
-                MagicMock(),
+                _ctx(),
                 template_dir=tmp_template_dir,
             )
 
@@ -68,7 +73,7 @@ class TestUseTemplate:
                 "variables": {"name": "Jon", "policy": "12345"},
                 "to": "claims@example.com",
             },
-            mock_client,
+            _ctx(mock_client),
             template_dir=tmp_template_dir,
         )
 
@@ -81,7 +86,7 @@ class TestUseTemplate:
         with pytest.raises(ValueError, match="Template not found"):
             handle_use_template(
                 {"name": "nonexistent", "variables": {}},
-                MagicMock(),
+                _ctx(),
                 template_dir=tmp_template_dir,
             )
 
@@ -98,6 +103,6 @@ class TestUseTemplate:
         with pytest.raises(ValueError, match="Missing variables"):
             handle_use_template(
                 {"name": "test", "variables": {"greeting": "Hi"}},
-                MagicMock(),
+                _ctx(),
                 template_dir=tmp_template_dir,
             )

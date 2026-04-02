@@ -2,15 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..email_client import EmailClient
+from ..handler_context import HandlerContext
+from .response import text_content as _text_content
 
 
-def _text_content(text: str) -> dict[str, Any]:
-    return {"content": [{"type": "text", "text": text}]}
-
-
-def handle_list_labels(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
-    labels = client.list_labels()
+def handle_list_labels(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
+    labels = ctx.client.list_labels()
     lines = [f"Found {len(labels)} labels:"]
     for label in labels:
         lines.append(
@@ -19,11 +16,11 @@ def handle_list_labels(args: dict[str, Any], client: EmailClient) -> dict[str, A
     return _text_content("\n".join(lines))
 
 
-def handle_modify_thread_labels(args: dict[str, Any], client: EmailClient) -> dict[str, Any]:
+def handle_modify_thread_labels(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     thread_id = args.get("threadId")
     if not thread_id:
         raise ValueError("threadId is required")
-    result = client.modify_thread_labels(
+    result = ctx.client.modify_thread_labels(
         thread_id=thread_id,
         add_label_ids=args.get("addLabelIds"),
         remove_label_ids=args.get("removeLabelIds"),

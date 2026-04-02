@@ -147,6 +147,34 @@ class EmailClient(ABC):
         else:
             return self._resolve_provider_attachment(att)
 
+    def trash_messages(self, message_ids: list[str]) -> dict[str, Any]:
+        """Trash messages by IDs."""
+        raise NotImplementedError(f"{self.provider} does not support trash_messages")
+
+    def trash_by_query(self, query: str, max_results: int = 500) -> dict[str, Any]:
+        """Trash messages matching a query."""
+        raise NotImplementedError(f"{self.provider} does not support trash_by_query")
+
+    def create_block_filter(self, sender: str) -> dict[str, Any]:
+        """Create a filter to auto-delete from a sender."""
+        raise NotImplementedError(f"{self.provider} does not support create_block_filter")
+
+    def report_spam(self, message_ids: list[str]) -> dict[str, Any]:
+        """Report messages as spam."""
+        raise NotImplementedError(f"{self.provider} does not support report_spam")
+
+    def get_contacts(self, max_results: int = 2000) -> list[dict[str, Any]]:
+        """List contacts with email addresses."""
+        raise NotImplementedError(f"{self.provider} does not support get_contacts")
+
+    def extract_unsubscribe_link(self, message_id: str) -> dict[str, Any]:
+        """Extract unsubscribe link from message headers."""
+        raise NotImplementedError(f"{self.provider} does not support extract_unsubscribe_link")
+
+    def create_label(self, name: str) -> dict[str, Any]:
+        """Create a new label/folder."""
+        raise NotImplementedError(f"{self.provider} does not support create_label")
+
     def _resolve_provider_attachment(self, att: dict[str, Any]) -> MIMEBase:
         raise NotImplementedError(
             f"Provider attachment type '{att.get('type')}' not supported by base EmailClient"
