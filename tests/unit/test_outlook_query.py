@@ -16,6 +16,10 @@ class TestTranslateGmailQuery:
         result = translate_gmail_query("is:unread")
         assert "isRead eq false" in result.filter
 
+    def test_is_important(self) -> None:
+        result = translate_gmail_query("is:important")
+        assert "importance eq 'high'" in result.filter
+
     def test_is_starred(self) -> None:
         result = translate_gmail_query("is:starred")
         assert "flagStatus eq 'flagged'" in result.filter

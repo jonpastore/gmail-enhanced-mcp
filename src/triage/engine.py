@@ -24,7 +24,7 @@ _DEFAULT_WEIGHTS: dict[str, float] = {
     "priority_sender_high": 0.25,
     "direct_recipient": 0.15,
     "is_reply_to_me": 0.15,
-    "has_deadline": 0.20,
+    "has_deadline": 0.25,
     "has_attachment": 0.05,
     "recent_24h": 0.05,
     "junk_detected": -0.50,
@@ -193,7 +193,7 @@ class ImportanceScorer:
         if _DEADLINE_PATTERN.search(subject):
             return ScoringSignal(
                 name="has_deadline",
-                weight=self._weights.get("has_deadline", 0.20),
+                weight=self._weights.get("has_deadline", 0.25),
                 detail="Subject contains deadline-related keywords",
             )
         return None

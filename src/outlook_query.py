@@ -25,6 +25,7 @@ FILTER_OPERATORS = {
     "is:unread": "isRead eq false",
     "is:read": "isRead eq true",
     "is:starred": "flag/flagStatus eq 'flagged'",
+    "is:important": "importance eq 'high'",
     "has:attachment": "hasAttachments eq true",
 }
 
