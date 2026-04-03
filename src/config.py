@@ -29,11 +29,6 @@ class Config:
         self.cache_db_path: str = os.getenv("TRIAGE_CACHE_DB", "data/triage_cache.db")
         self.triage_config_path: str = os.getenv("TRIAGE_CONFIG", "data/triage_config.json")
         self.calendar_enabled: bool = os.getenv("CALENDAR_ENABLED", "false").lower() == "true"
-        self.user_timezone: str = os.getenv("USER_TIMEZONE", "America/New_York")
-        self.digest_frequency: str = os.getenv("DIGEST_FREQUENCY", "daily")
-        self.digest_time: str = os.getenv("DIGEST_TIME", "08:00")
-        self.digest_day: str = os.getenv("DIGEST_DAY", "monday")
-        self.digest_timezone: str = os.getenv("DIGEST_TIMEZONE", self.user_timezone)
         self.accounts_path: str = os.getenv("ACCOUNTS_PATH", "accounts.json")
         self.mcp_auth_token: str | None = os.getenv("MCP_AUTH_TOKEN")
         self.http_port: int = int(os.getenv("HTTP_PORT", "8420"))
