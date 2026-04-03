@@ -38,7 +38,7 @@ class TokenManager:
             return None
         try:
             data = json.loads(self._token_path.read_text())
-            return Credentials.from_authorized_user_info(data, SCOPES)  # type: ignore[no-any-return,no-untyped-call]
+            return Credentials.from_authorized_user_info(data)  # type: ignore[no-any-return,no-untyped-call]
         except Exception as e:
             logger.warning(f"Failed to load token: {e}")
             return None
