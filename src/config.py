@@ -29,6 +29,10 @@ class Config:
         self.triage_config_path: str = os.getenv("TRIAGE_CONFIG", "data/triage_config.json")
         self.calendar_enabled: bool = os.getenv("CALENDAR_ENABLED", "false").lower() == "true"
         self.user_timezone: str = os.getenv("USER_TIMEZONE", "America/New_York")
+        self.digest_frequency: str = os.getenv("DIGEST_FREQUENCY", "daily")
+        self.digest_time: str = os.getenv("DIGEST_TIME", "08:00")
+        self.digest_day: str = os.getenv("DIGEST_DAY", "monday")
+        self.digest_timezone: str = os.getenv("DIGEST_TIMEZONE", self.user_timezone)
 
     def load_accounts(self) -> list[dict[str, Any]]:
         path = Path(self.accounts_path)

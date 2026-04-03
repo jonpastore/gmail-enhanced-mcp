@@ -17,6 +17,7 @@ from .calendar import (
     handle_meeting_prep,
     handle_today_briefing,
 )
+from .digest import handle_generate_digest
 from .drafts import handle_create_draft, handle_list_drafts, handle_send_draft, handle_update_draft
 from .hygiene import (
     handle_block_sender,
@@ -91,6 +92,7 @@ _HANDLER_MAP: dict[str, Any] = {
     "gmail_check_email_conflicts": handle_check_email_conflicts,
     "gmail_meeting_prep": handle_meeting_prep,
     "gmail_today_briefing": handle_today_briefing,
+    "gmail_generate_digest": handle_generate_digest,
 }
 
 

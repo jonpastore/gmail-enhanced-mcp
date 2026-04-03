@@ -53,7 +53,7 @@ class TestTriageToolsInRegistry:
     def test_total_tool_count_is_38(self) -> None:
         registry, _ = _make_registry()
         tools = registry.list_tools()
-        assert len(tools) == 38
+        assert len(tools) == 39
 
     def test_triage_inbox_via_execute(self) -> None:
         registry, _ = _make_registry()

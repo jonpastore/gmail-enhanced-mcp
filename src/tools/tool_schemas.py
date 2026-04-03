@@ -638,6 +638,32 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+        "name": "gmail_generate_digest",
+        "description": "Generate a structured email digest with summary and actionable items.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "period": {
+                    "type": "string",
+                    "enum": ["daily", "weekly"],
+                    "default": "daily",
+                    "description": "Digest period",
+                },
+                "sendEmail": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Send digest as email to the account",
+                },
+                "maxResults": {
+                    "type": "integer",
+                    "default": 100,
+                    "description": "Max unread messages to include",
+                },
+            },
+            "required": [],
+        },
+    },
 ]
 
 for _tool in TOOL_DEFINITIONS:
