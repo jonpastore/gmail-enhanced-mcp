@@ -13,7 +13,7 @@ class TestConfig:
         with patch.dict(os.environ, {}, clear=True):
             cfg = Config()
             assert cfg.log_level == "INFO"
-            assert cfg.log_file == "mcp_server.log"
+            assert cfg.log_file.endswith("gmail-enhanced-mcp/mcp_server.log")
             assert cfg.client_secret_path == "credentials/client_secret.json"
             assert cfg.token_path == "credentials/token.json"
             assert cfg.accounts_path == "accounts.json"
