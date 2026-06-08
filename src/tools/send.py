@@ -23,6 +23,6 @@ def handle_send_email(args: dict[str, Any], ctx: HandlerContext) -> dict[str, An
         attachments=args.get("attachments"),
     )
     return _text_content(
-        f"Email sent successfully.\nMessage ID: {result['id']}\n"
+        f"Email sent successfully.\nMessage ID: {result.get('id', '(sent)')}\n"
         f"Labels: {', '.join(result.get('labelIds', []))}"
     )
