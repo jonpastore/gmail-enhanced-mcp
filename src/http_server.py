@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -111,7 +112,12 @@ def create_mcp_server(tool_registry: ToolRegistry) -> Server:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         params = ToolCallParams(name=name, arguments=arguments)
-        result = tool_registry.execute_tool(params)
+        # Tool handlers wrap blocking Google API client calls (sync HTTP via
+        # google-api-python-client). Running them inline on the asyncio event
+        # loop freezes ALL concurrent requests — observed as multi-minute hangs
+        # on slow read_message calls. Offload to a thread pool so the loop
+        # stays responsive.
+        result = await asyncio.to_thread(tool_registry.execute_tool, params)
         content = result.get("content", [])
         return [TextContent(type="text", text=c.get("text", "")) for c in content]
 
@@ -172,7 +178,7 @@ def create_app(cfg: Config) -> Starlette:
 
     ui_dir = Path(__file__).parent / "ui"
 
-    return Starlette(
+    starlette_app = Starlette(
         routes=[
             Route("/health", health),
             Route("/restart", restart, methods=["POST"]),
@@ -182,6 +188,22 @@ def create_app(cfg: Config) -> Starlette:
         lifespan=lifespan,
         middleware=middleware,
     )
+
+    # Rewrite /mcp → /mcp/ so the Mount matches without issuing a 307 redirect.
+    # The claude.ai proxy registers the URL without a trailing slash and does not
+    # follow redirects, so we normalise the path at the ASGI layer.
+    class _NormalizeMcpPath:
+        def __init__(self, app: Any) -> None:
+            self._app = app
+
+        async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+            if scope.get("type") == "http" and scope.get("path") == "/mcp":
+                scope = dict(scope)
+                scope["path"] = "/mcp/"
+                scope["raw_path"] = b"/mcp/"
+            await self._app(scope, receive, send)
+
+    return _NormalizeMcpPath(starlette_app)
 
 
 def run_http_server(cfg: Config, port: int = 8420) -> None:
