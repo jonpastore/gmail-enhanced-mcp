@@ -44,6 +44,10 @@ def _apply_signature(body: str, content_type: str, sig: dict) -> str:
     """Idempotently append the signature. If the marker text is already present
     (e.g. a reply quoting a previously-signed message), leave the body unchanged."""
     marker = sig.get("marker") or ""
+    if not marker:
+        # No explicit marker → fall back to the first non-empty signature line,
+        # so dedup still works and the signature can't accumulate on quoted replies.
+        marker = next((ln for ln in (sig.get("text") or "").splitlines() if ln.strip()), "")
     if marker and marker in body:
         return body
     if "html" in (content_type or "").lower():

@@ -13,6 +13,7 @@ htmlcov/
 mcp_server.log
 .gstack/
 accounts.json
+signatures.json
 .cloudflared/
 data/
 .continue-here.md
