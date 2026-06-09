@@ -585,3 +585,54 @@ class TestThreadSafety:
             t.join()
         assert len(errors) == 0
         assert cache.row_count("message_cache") == 50
+
+
+class TestMailDataPolicyE5:
+    """Regression for the cache-for-processing-not-store policy (E5 / jarvis #67).
+
+    Two invariants the triage cache must uphold:
+      1. It stores only HASHED metadata + derived scores — never raw bodies, raw
+         subjects, or raw addresses (no shadow mail archive).
+      2. It stays BOUNDED — initialize() purges expired rows so nothing lingers past
+         its working-cache TTL.
+    """
+
+    # Columns that would indicate raw email CONTENT was persisted. Hashed columns
+    # (subject_hash, from_hash, to_hashes) are fine; these plaintext names are not.
+    FORBIDDEN_COLUMNS = {
+        "body", "body_text", "body_html", "raw", "raw_body", "content", "snippet",
+        "subject", "from_addr", "from_email", "to", "to_addrs", "cc", "bcc",
+        "attachment", "attachment_data", "message_body", "text", "html",
+    }
+
+    def test_no_raw_content_columns_anywhere(self, cache: TriageCache) -> None:
+        tables = cache._execute_read("SELECT name FROM sqlite_master WHERE type='table'")
+        for t in tables:
+            name = t["name"]
+            if name.startswith("sqlite_"):
+                continue
+            cols = {c["name"].lower() for c in cache._execute_read(f"PRAGMA table_info({name})")}
+            leaked = cols & self.FORBIDDEN_COLUMNS
+            assert not leaked, f"table {name} persists raw content columns: {leaked}"
+
+    def test_initialize_enforces_ttl_purge(self, tmp_path: object) -> None:
+        from pathlib import Path
+
+        db = Path(tmp_path) / "ttl.db"  # type: ignore[arg-type]
+        c = TriageCache(db_path=db)
+        c.initialize()
+        # Seed an expired metadata row (>30d old), then reopen — initialize() must purge it.
+        old = (datetime.now(tz=UTC) - timedelta(days=40)).isoformat()
+        c._execute_write(
+            "INSERT INTO message_cache (message_id, thread_id, account_hash, from_hash,"
+            " to_hashes, subject_hash, date_received, label_ids, cached_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("stale-msg", "t1", "acct", "fh", "[]", "sh", old, "[]", old),
+        )
+        assert c._execute_read("SELECT count(*) n FROM message_cache")[0]["n"] == 1
+        c.close()
+
+        c2 = TriageCache(db_path=db)
+        c2.initialize()  # must call evict_expired() -> stale metadata gone
+        assert c2._execute_read("SELECT count(*) n FROM message_cache")[0]["n"] == 0
+        c2.close()

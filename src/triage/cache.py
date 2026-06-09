@@ -113,6 +113,12 @@ class TriageCache:
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(_SCHEMA_SQL)
         self._conn.commit()
+        # Enforce the bounded-TTL mail-data policy on every startup (E5 / jarvis #67:
+        # cache-for-processing, not store). The cache holds only HASHED metadata + derived
+        # scores — never raw bodies — but it must also stay BOUNDED: purge scores >24h and
+        # metadata >30d so nothing lingers past its working-cache window. The sweeper was
+        # defined but never invoked; calling it here closes that gap.
+        self.evict_expired()
 
     def close(self) -> None:
         """Close the database connection."""
