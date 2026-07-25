@@ -108,14 +108,15 @@ class OutlookClient(EmailClient):
         return self._normalize_message(msg)
 
     def read_thread(self, thread_id: str) -> dict[str, Any]:
+        # Graph rejects $orderby alongside a $filter on conversationId (400 Bad Request) —
+        # the pair needs an index Exchange does not maintain. Sort client-side instead; a
+        # single conversation is small enough that this costs nothing.
         data = self._graph_get(
             "/me/messages",
-            params={
-                "$filter": f"conversationId eq '{thread_id}'",
-                "$orderby": "receivedDateTime",
-            },
+            params={"$filter": f"conversationId eq '{thread_id}'"},
         )
         messages = [self._normalize_message(m) for m in data.get("value", [])]
+        messages.sort(key=lambda m: m.get("internalDate") or "")
         return {
             "id": thread_id,
             "messages": messages,
@@ -223,10 +224,12 @@ class OutlookClient(EmailClient):
         thread_id: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        msg_body = self._build_graph_message(to, subject, body, content_type, cc, bcc, thread_id)
-        resp = self._graph_post("/me/messages", msg_body)
-        draft = resp.json()
-        draft_id = draft["id"]
+        if thread_id:
+            draft_id = self._create_reply_draft(thread_id, to, subject, body, content_type, cc, bcc)
+        else:
+            msg_body = self._build_graph_message(to, subject, body, content_type, cc, bcc)
+            resp = self._graph_post("/me/messages", msg_body)
+            draft_id = resp.json()["id"]
 
         graph_atts = self._build_graph_attachments(attachments)
         for att in graph_atts:
@@ -245,7 +248,13 @@ class OutlookClient(EmailClient):
         bcc: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
+        # PATCH must carry ONLY the fields the caller supplied. _build_graph_message always
+        # emits a body block, so passing body="" (its default) used to overwrite the draft with
+        # an empty one — updating just the cc silently destroyed a finished message. Everything
+        # not named here is left alone, which is what "update" has to mean.
         msg_body = self._build_graph_message(to, subject, body, content_type, cc, bcc)
+        if not body:
+            msg_body.pop("body", None)
         result = self._graph_patch(f"/me/messages/{draft_id}", msg_body)
 
         graph_atts = self._build_graph_attachments(attachments)
@@ -275,6 +284,53 @@ class OutlookClient(EmailClient):
         send_body = {"message": message, "saveToSentItems": True}
         self._graph_post("/me/sendMail", send_body)
         return {"status": "sent"}
+
+    def _create_reply_draft(
+        self,
+        thread_id: str,
+        to: str | None,
+        subject: str | None,
+        body: str,
+        content_type: str,
+        cc: str | None,
+        bcc: str | None,
+    ) -> str:
+        """Draft a real reply in an existing conversation.
+
+        conversationId is READ-ONLY on Graph: setting it on POST /me/messages is accepted and
+        then ignored, so a "reply" came out as a brand-new thread carrying only a Re: subject.
+        The only way to thread is to ask Graph to build the reply from a message in the target
+        conversation, then PATCH our content onto the draft it hands back.
+
+        Replies to the newest message in the thread, which is what a human hitting Reply All
+        would do. Falls back to a standalone draft if the conversation cannot be read, so a
+        stale thread id degrades to today's behaviour rather than failing the call.
+        """
+        try:
+            found = self._graph_get(
+                "/me/messages", params={"$filter": f"conversationId eq '{thread_id}'"}
+            ).get("value", [])
+        except requests.HTTPError:
+            found = []
+        if not found:
+            logger.warning(f"No message found in conversation {thread_id}; drafting standalone")
+            resp = self._graph_post(
+                "/me/messages", self._build_graph_message(to, subject, body, content_type, cc, bcc)
+            )
+            return resp.json()["id"]
+
+        found.sort(key=lambda m: m.get("receivedDateTime") or "")
+        reply_to_id = found[-1]["id"]
+        # createReplyAll pre-populates recipients and the quoted history; explicit to/cc below
+        # still win, so a caller can narrow the audience.
+        draft_id = self._graph_post(f"/me/messages/{reply_to_id}/createReplyAll").json()["id"]
+
+        patch = self._build_graph_message(to, subject, body, content_type, cc, bcc)
+        if not body:
+            patch.pop("body", None)
+        if patch:
+            self._graph_patch(f"/me/messages/{draft_id}", patch)
+        return draft_id
 
     def _build_graph_message(
         self,
@@ -352,6 +408,24 @@ class OutlookClient(EmailClient):
         body_type = msg.get("body", {}).get("contentType", "text")
         body_data = base64.urlsafe_b64encode(body_content.encode()).decode()
 
+        # Attachment stubs in Gmail's `parts` shape. Without these, an Outlook message always
+        # looked attachment-free to every caller — including gmail_download_attachment, which
+        # needs the id — so there was no way to confirm an attachment had landed.
+        parts: list[dict[str, Any]] = []
+        if msg.get("hasAttachments"):
+            try:
+                for att in self._graph_get(
+                    f"/me/messages/{msg['id']}/attachments",
+                    params={"$select": "id,name,contentType,size"},
+                ).get("value", []):
+                    parts.append({
+                        "filename": att.get("name", ""),
+                        "mimeType": att.get("contentType", ""),
+                        "body": {"attachmentId": att.get("id", ""), "size": att.get("size", 0)},
+                    })
+            except requests.HTTPError as exc:      # listing is a nicety, never fail the read
+                logger.warning(f"Could not list attachments for {msg['id']}: {exc}")
+
         label_ids: list[str] = []
         if not msg.get("isRead", True):
             label_ids.append("UNREAD")
@@ -367,7 +441,7 @@ class OutlookClient(EmailClient):
                 "mimeType": f"text/{'html' if body_type == 'html' else 'plain'}",
                 "headers": headers,
                 "body": {"data": body_data, "size": len(body_content)},
-                "parts": [],
+                "parts": parts,
             },
             "sizeEstimate": msg.get("size", 0),
             "internalDate": msg.get("receivedDateTime", ""),

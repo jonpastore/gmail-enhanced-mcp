@@ -180,3 +180,90 @@ class TestListLabels:
         assert len(result) == 2
         types = {label["type"] for label in result}
         assert types == {"system", "user"}
+
+
+class TestDraftRegressions:
+    """Four bugs found 2026-07-25 while drafting a client email through this bridge.
+
+    Every one of them failed SILENTLY — the calls returned success and did the wrong thing,
+    which cost a real draft its body twice before the pattern was spotted.
+    """
+
+    def test_update_draft_does_not_wipe_the_body_when_only_cc_is_given(self) -> None:
+        """`body` defaults to "" and _build_graph_message always emits a body block, so a
+        cc-only update used to PATCH the draft's content to empty."""
+        client = _make_client()
+        with patch.object(client, "_graph_patch", return_value={"id": "d1"}) as patched:
+            client.update_draft("d1", cc="a@b.com")
+        sent = patched.call_args[0][1]
+        assert "body" not in sent, "an unsupplied body must not be PATCHed"
+        assert sent["ccRecipients"] == [{"emailAddress": {"address": "a@b.com"}}]
+
+    def test_update_draft_still_sets_the_body_when_given_one(self) -> None:
+        client = _make_client()
+        with patch.object(client, "_graph_patch", return_value={"id": "d1"}) as patched:
+            client.update_draft("d1", body="hello", content_type="text/html")
+        sent = patched.call_args[0][1]
+        assert sent["body"] == {"contentType": "HTML", "content": "hello"}
+
+    def test_thread_id_creates_a_real_reply_not_a_new_conversation(self) -> None:
+        """conversationId is read-only on Graph: POSTing it is accepted and ignored, so the
+        'reply' landed in a brand-new thread. Only createReplyAll actually threads."""
+        client = _make_client()
+        posted: list[str] = []
+
+        def fake_post(path: str, json_body: dict | None = None) -> Any:
+            posted.append(path)
+            resp = MagicMock()
+            resp.json.return_value = {"id": "reply_draft"}
+            return resp
+
+        thread_msgs = {"value": [{"id": "m1", "receivedDateTime": "2026-01-01"}]}
+        with patch.object(client, "_graph_get", return_value=thread_msgs), \
+             patch.object(client, "_graph_post", side_effect=fake_post), \
+             patch.object(client, "_graph_patch", return_value={"id": "reply_draft"}):
+            result = client.create_draft(to="x@y.com", subject="s", body="b", thread_id="conv_9")
+
+        assert result["id"] == "reply_draft"
+        assert any("createReplyAll" in p for p in posted), posted
+        assert not any(p == "/me/messages" for p in posted), "must not POST a standalone message"
+
+    def test_read_thread_does_not_send_orderby(self) -> None:
+        """Graph 400s on $filter(conversationId) + $orderby; sort client-side instead."""
+        client = _make_client()
+        with patch.object(client, "_graph_get", return_value={"value": []}) as got:
+            client.read_thread("conv_1")
+        assert "$orderby" not in got.call_args[1]["params"]
+
+    def test_read_thread_sorts_oldest_first(self) -> None:
+        client = _make_client()
+        newer = _graph_message("m2")
+        newer["receivedDateTime"] = "2026-05-01T10:00:00Z"
+        older = _graph_message("m1")
+        older["receivedDateTime"] = "2026-01-01T10:00:00Z"
+        with patch.object(client, "_graph_get", return_value={"value": [newer, older]}):
+            thread = client.read_thread("conv_1")
+        assert [m["id"] for m in thread["messages"]] == ["m1", "m2"]
+
+    def test_attachments_surface_as_parts_with_a_downloadable_id(self) -> None:
+        """Outlook messages always reported `parts: []`, so callers could neither see an
+        attachment nor obtain the id that gmail_download_attachment requires."""
+        client = _make_client()
+        msg = _graph_message()
+        msg["hasAttachments"] = True
+        att = {"value": [{"id": "att1", "name": "x.pdf",
+                          "contentType": "application/pdf", "size": 99}]}
+        with patch.object(client, "_graph_get", return_value=att):
+            normalized = client._normalize_message(msg)
+        parts = normalized["payload"]["parts"]
+        assert parts[0]["filename"] == "x.pdf"
+        assert parts[0]["body"]["attachmentId"] == "att1"
+
+    def test_cc_is_emitted_as_a_header(self) -> None:
+        """_format_message only prints headers that exist; without this a real Cc read back
+        as if the recipients had been dropped."""
+        client = _make_client()
+        msg = _graph_message()
+        msg["ccRecipients"] = [{"emailAddress": {"name": "C", "address": "c@d.com"}}]
+        headers = client._normalize_message(msg)["payload"]["headers"]
+        assert any(h["name"] == "Cc" and "c@d.com" in h["value"] for h in headers)

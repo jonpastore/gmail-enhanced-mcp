@@ -56,6 +56,7 @@ def _format_message(msg: dict[str, Any]) -> str:
     headers = payload.get("headers", [])
     from_addr = _get_header(headers, "From")
     to_addr = _get_header(headers, "To")
+    cc_addr = _get_header(headers, "Cc")
     subject = _get_header(headers, "Subject")
     date = _get_header(headers, "Date")
 
@@ -67,9 +68,12 @@ def _format_message(msg: dict[str, Any]) -> str:
             att_id = part.get("body", {}).get("attachmentId", "")
             attachments.append(f"  - {part['filename']} (id: {att_id})")
 
+    # Cc was never printed, so a draft that HAD a Cc read back as if it had none — which is
+    # exactly how a working reply-all gets misdiagnosed as a dropped-recipient bug.
     lines = [
         f"From: {from_addr}",
         f"To: {to_addr}",
+        *([f"Cc: {cc_addr}"] if cc_addr else []),
         f"Subject: {subject}",
         f"Date: {date}",
         f"Message ID: {msg['id']}",
