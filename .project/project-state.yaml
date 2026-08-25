@@ -1,0 +1,65 @@
+# Product control plane — gmail-enhanced-mcp
+# Created 2026-08-25 by project-lifecycle-orchestrator (REVIEW_OPTIMIZE)
+
+objective: Durable mail sorting, attention surfacing, junk unsubscribe, and a digest safety net across Gmail and Outlook
+mode: BROWNFIELD
+lifecycle_phase: SPECIFY
+risk_tier: CONSEQUENTIAL
+readiness: SPEC_DRAFTED
+
+# Suite currency: policy/core.md not present in installed skill clone; proceeded from SKILL.md contracts.
+
+active_slice: sort-rules
+decisions:
+  - id: rule-execution
+    value: hybrid-native-provider-rules
+    approved: 2026-08-25
+    notes: Gmail filters + Outlook messageRules/folders sort mail. MCP proposes/creates/lists/deletes after user approval. Digest reports high-importance mail that left inbox unread.
+  - id: folder-contract
+    value: starter-pack-leave-inbox
+    approved: 2026-08-25
+    source: design yes 2026-08-25
+    notes: Matching mail leaves Inbox (Gmail skipInbox, Outlook move). Starter folders Newsletters, Receipts, Finance, Travel, Social, Junk plus custom. Retroactive file of existing matches.
+  - id: rule-model
+    value: unified-mailrule-compile-to-native
+    approved: 2026-08-25
+    source: design yes 2026-08-25
+spec: docs/superpowers/specs/2026-08-25-sort-rules-design.md
+scope_gaps:
+  - gmail.settings.basic required to CREATE filters (gmail.modify lists/gets only). Existing gmail_block_sender may 403 on create.
+  - MailboxSettings.ReadWrite required for Outlook messageRules. Current Microsoft scopes are Mail.ReadWrite + Mail.Send only.
+next_specialist: writing-plans
+next_gate: User reviews written spec, then implementation plan
+
+contradictions:
+  - Phase 1 design says "no action without user approval"; request includes auto-sort and unsubscribe
+  - Hygiene tools are Gmail-only; EmailClient ABC already has Outlook accounts
+  - AutoSortProposal exists but never applies labels or creates provider rules
+  - Digest exists but only scores unread in the default search, not mail already sorted out of inbox
+
+existing_authoritative:
+  - docs/superpowers/specs/2026-03-30-gmail-enhanced-mcp-design.md  # AUTHORITATIVE phased roadmap
+  - docs/superpowers/specs/2026-04-01-email-hygiene-tools-design.md  # APPROVED, Gmail-only
+  - docs/superpowers/specs/2026-04-02-phase6-smart-digest-design.md  # APPROVED, implemented
+  - src/email_client.py                                             # AUTHORITATIVE provider boundary
+
+subsystems:
+  - id: sort-rules
+    status: MISSING
+    notes: No durable rule CRUD. Gmail has one-shot create_block_filter (trash only). Outlook has no filters/folders create.
+  - id: attention
+    status: PARTIAL
+    notes: triage, needs_reply, follow-ups, priority senders exist; they do not move mail or pin a needs-attention folder.
+  - id: unsubscribe
+    status: PARTIAL
+    notes: gmail_get_unsubscribe_link extracts List-Unsubscribe and does not execute. Outlook unimplemented.
+  - id: junk-rules
+    status: PARTIAL
+    notes: JunkDetector + AutoSortProposal + gmail_block_sender/report_spam. No durable "sort to junk folder" rule, no Outlook parity.
+  - id: digest-safety-net
+    status: PARTIAL
+    notes: gmail_generate_digest + scripts/generate-digest.py. Does not report auto-sorted unread that still needs attention.
+
+providers:
+  gmail: implemented
+  outlook: implemented_for_read_search_draft_send_labels_mapped_to_folders_and_categories

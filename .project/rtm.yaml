@@ -1,0 +1,50 @@
+# RTM — sort-rules slice (2026-08-25)
+# Full statements live in docs/superpowers/specs/2026-08-25-sort-rules-design.md
+
+slice: sort-rules
+spec: docs/superpowers/specs/2026-08-25-sort-rules-design.md
+status: DRAFT_AWAITING_USER_REVIEW
+
+requirements:
+  - id: PRD-010
+    covers: ensure starter + extra folders, idempotent
+  - id: PRD-020
+    covers: create native skip-inbox / move rule
+  - id: PRD-030
+    covers: retroactive Inbox file, cap 200/500
+  - id: PRD-040
+    covers: list skip-inbox / move rules
+  - id: PRD-050
+    covers: delete by ruleId, mail stays
+  - id: PRD-060
+    covers: Junk is user folder, not system spam
+  - id: PRD-070
+    covers: both Gmail and Outlook, no gmail_only
+  - id: PRD-080
+    covers: missing destination folder created
+  - id: NFR-010
+    covers: gmail.settings.basic + re-auth error
+  - id: NFR-020
+    covers: MailboxSettings.ReadWrite + Azure + re-auth error
+  - id: NFR-030
+    covers: file/function limits; translators have no I/O
+  - id: NFR-040
+    covers: no retry on move; batchModify / Graph move
+  - id: DOM-010
+    covers: from_value email or domain
+  - id: DOM-020
+    covers: STARTER_FOLDERS tuple
+  - id: DOM-030
+    covers: leave Inbox; Outlook move not categories
+  - id: TRD-010
+    covers: tools call EmailClient only
+  - id: TRD-020
+    covers: five new EmailClient methods + Outlook create_label
+  - id: TRD-030
+    covers: create_block_filter unchanged
+
+deferred:
+  - slice: digest-safety-net
+    depends_on: STARTER_FOLDERS frozen
+  - slice: unsubscribe-execute
+  - slice: attention
