@@ -153,7 +153,8 @@ class TestHandleGenerateDigest:
         client = _make_client()
         handle_generate_digest({"maxResults": 50}, _ctx(client))
 
-        client.search_messages.assert_called_once_with(q="is:unread", max_results=50)
+        client.search_messages.assert_any_call(q="is:unread", max_results=50)
+        assert client.search_messages.call_count >= 1
 
     def test_send_email_uses_html_content_type(self) -> None:
         from src.tools.digest import handle_generate_digest

@@ -9,8 +9,11 @@ from typing import Any
 from pydantic import BaseModel
 
 from ..calendar.date_parser import DateParser
+from ..sort.models import STARTER_FOLDERS
 from ..triage.engine import ImportanceScorer, JunkDetector
 from ..triage.tracker import FollowUpTracker
+
+_ATTENTION_CATEGORIES = frozenset({"critical", "high"})
 
 
 class DigestItem(BaseModel):
@@ -39,6 +42,7 @@ class DigestActionable(BaseModel):
     deadlines: list[dict[str, Any]] = []
     overdue_followups: list[dict[str, Any]] = []
     calendar_conflicts: list[dict[str, Any]] = []
+    sorted_away: list[dict[str, Any]] = []
 
 
 class DigestResult(BaseModel):
@@ -80,6 +84,14 @@ def _get_headers(msg: dict[str, Any]) -> dict[str, str]:
     """
     payload = msg.get("payload", {})
     return {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
+
+
+def _client_provider(client: Any, account: str) -> str:
+    """Use EmailClient.provider when it is gmail or outlook; else infer from address."""
+    raw = getattr(client, "provider", None)
+    if raw in ("gmail", "outlook"):
+        return str(raw)
+    return _detect_provider(account)
 
 
 def _detect_provider(account: str) -> str:
@@ -137,10 +149,12 @@ class DigestEngine:
             DigestResult populated with summary and actionable data.
         """
         account = self._client.email_address
-        provider = _detect_provider(account)
+        provider = _client_provider(self._client, account)
         generated_at = datetime.now(tz=UTC).isoformat()
 
-        messages = self._fetch_messages(max_results)
+        inbox_messages = self._fetch_messages(max_results)
+        filed = self._fetch_filed_unread(max_results)
+        messages = self._merge_messages(inbox_messages, filed)
         scores = ImportanceScorer(self._cache, calendar_ctx=self._calendar_ctx).score_messages(
             messages, account
         )
@@ -154,6 +168,7 @@ class DigestEngine:
         top_scores = scores[:10]
         msg_by_id = {m.get("id", ""): m for m in messages}
         top_items = self._build_top_items(top_scores, msg_by_id, provider)
+        sorted_away = self._build_sorted_away(filed, score_by_id, msg_by_id, provider)
 
         needs_reply = self._find_needs_reply(messages, account, score_by_id, provider)
         deadlines = self._find_deadlines(top_scores, msg_by_id, provider)
@@ -174,6 +189,7 @@ class DigestEngine:
                 deadlines=deadlines,
                 overdue_followups=overdue,
                 calendar_conflicts=calendar_conflicts,
+                sorted_away=sorted_away,
             ),
         )
 
@@ -186,7 +202,49 @@ class DigestEngine:
         Returns:
             List of full message dicts.
         """
-        result = self._client.search_messages(q="is:unread", max_results=max_results)
+        return self._read_search("is:unread", max_results)
+
+    def _fetch_filed_unread(self, max_results: int) -> dict[str, list[dict[str, Any]]]:
+        """Fetch unread messages already filed into starter folders.
+
+        Args:
+            max_results: Cap split across starter folders.
+
+        Returns:
+            Mapping of folder name to full message dicts.
+        """
+        provider = _client_provider(self._client, self._client.email_address)
+        folder_ids = self._outlook_folder_ids() if provider == "outlook" else {}
+        per_folder = max(1, max_results // max(len(STARTER_FOLDERS), 1))
+        filed: dict[str, list[dict[str, Any]]] = {}
+        for folder in STARTER_FOLDERS:
+            query = self._folder_unread_query(folder, provider, folder_ids)
+            if query is None:
+                continue
+            messages = self._read_search(query, per_folder)
+            if messages:
+                filed[folder] = messages
+        return filed
+
+    def _outlook_folder_ids(self) -> dict[str, str]:
+        try:
+            labels = self._client.list_labels()
+        except Exception:
+            return {}
+        return {str(lbl.get("name")): str(lbl.get("id")) for lbl in labels}
+
+    def _folder_unread_query(
+        self, folder: str, provider: str, folder_ids: dict[str, str]
+    ) -> str | None:
+        if provider == "outlook":
+            folder_id = folder_ids.get(folder)
+            if not folder_id:
+                return None
+            return f"is:unread in:{folder_id}"
+        return f"is:unread label:{folder}"
+
+    def _read_search(self, query: str, max_results: int) -> list[dict[str, Any]]:
+        result = self._client.search_messages(q=query, max_results=max_results)
         stubs: list[dict[str, Any]] = result.get("messages", [])
         messages: list[dict[str, Any]] = []
         batch_size = 10
@@ -195,11 +253,55 @@ class DigestEngine:
                 time.sleep(0.1)
             for stub in stubs[i : i + batch_size]:
                 try:
-                    msg = self._client.read_message(stub["id"])
-                    messages.append(msg)
+                    messages.append(self._client.read_message(stub["id"]))
                 except Exception:
                     continue
         return messages
+
+    def _merge_messages(
+        self,
+        inbox: list[dict[str, Any]],
+        filed: dict[str, list[dict[str, Any]]],
+    ) -> list[dict[str, Any]]:
+        merged = list(inbox)
+        seen = {str(msg.get("id")) for msg in inbox}
+        for folder_msgs in filed.values():
+            for msg in folder_msgs:
+                msg_id = str(msg.get("id"))
+                if msg_id not in seen:
+                    merged.append(msg)
+                    seen.add(msg_id)
+        return merged
+
+    def _build_sorted_away(
+        self,
+        filed: dict[str, list[dict[str, Any]]],
+        score_by_id: dict[str, Any],
+        msg_by_id: dict[str, dict[str, Any]],
+        provider: str,
+    ) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        for folder, messages in filed.items():
+            for msg in messages:
+                msg_id = str(msg.get("id", ""))
+                score = score_by_id.get(msg_id)
+                if score is None:
+                    continue
+                category = str(score.category).lower()
+                if category not in _ATTENTION_CATEGORIES:
+                    continue
+                headers = _get_headers(msg_by_id.get(msg_id, msg))
+                items.append(
+                    {
+                        "message_id": msg_id,
+                        "from": headers.get("from", ""),
+                        "subject": headers.get("subject", ""),
+                        "category": category,
+                        "folder": folder,
+                        "link": _make_link(msg_id, provider),
+                    }
+                )
+        return items
 
     def _build_top_items(
         self,

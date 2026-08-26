@@ -108,6 +108,26 @@ def format_digest_html(result: DigestResult) -> str:
     else:
         sections.append("<p>All clear \u2014 no unread messages.</p>")
 
+    sorted_away = result.actionable.sorted_away
+    heading = f"Filed away unread \u2014 needs attention ({len(sorted_away)})"
+    sections.append(f'<h3 style="{_H3_STYLE}">{heading}</h3>')
+    if sorted_away:
+        sections.append("<ul>")
+        for item in sorted_away:
+            link_url = str(item.get("link", ""))
+            subject = str(item.get("subject", "(no subject)"))
+            folder = str(item.get("folder", ""))
+            from_addr = str(item.get("from", ""))
+            link = _linked(link_url, subject) if link_url else subject
+            meta = f' <span style="{_MUTED_STYLE}">\u2014 {folder}'
+            if from_addr:
+                meta += f" / {from_addr}"
+            meta += "</span>"
+            sections.append(f'  <li style="{_ITEM_STYLE}">{link}{meta}</li>')
+        sections.append("</ul>")
+    else:
+        sections.append("<p>No high-importance mail was filed out of Inbox unread.</p>")
+
     needs_reply = result.actionable.needs_reply
     sections.append(f'<h3 style="{_H3_STYLE}">Needs Your Reply ({len(needs_reply)})</h3>')
     if needs_reply:
@@ -221,6 +241,20 @@ def format_digest_text(result: DigestResult) -> str:
                 lines.append(f"  {item.link}")
     else:
         lines.append("All clear -- no unread messages.")
+    lines.append("")
+
+    sorted_away = result.actionable.sorted_away
+    lines.append(f"=== Filed away unread -- needs attention ({len(sorted_away)}) ===")
+    if sorted_away:
+        for item in sorted_away:
+            lines.append(
+                f"{item.get('subject', '(no subject)')} -- {item.get('folder', '')}"
+                f" / {item.get('from', '')}"
+            )
+            if item.get("link"):
+                lines.append(f"  {item['link']}")
+    else:
+        lines.append("No high-importance mail was filed out of Inbox unread.")
     lines.append("")
 
     needs_reply = result.actionable.needs_reply

@@ -117,6 +117,23 @@ class TestFormatDigestHtml:
         assert "Needs Your Reply (0)" in html
         assert "No messages need your reply" in html
 
+    def test_includes_sorted_away_section(self) -> None:
+        result = _make_result()
+        result.actionable.sorted_away = [
+            {
+                "message_id": "f1",
+                "from": "boss@company.com",
+                "subject": "Contract review",
+                "category": "high",
+                "folder": "Newsletters",
+                "link": "https://mail.google.com/mail/u/0/#inbox/f1",
+            }
+        ]
+        html = format_digest_html(result)
+        assert "Filed away unread" in html
+        assert "Contract review" in html
+        assert "Newsletters" in html
+
     def test_omits_calendar_section_when_no_events(self) -> None:
         result = _make_result(calendar_conflicts=[])
         html = format_digest_html(result)

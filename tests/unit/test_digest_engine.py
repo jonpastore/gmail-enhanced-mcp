@@ -44,11 +44,27 @@ def _make_msg(
 def _make_client(messages: list[dict[str, Any]], email: str = "test@gmail.com") -> MagicMock:
     client = MagicMock()
     client.email_address = email
-    client.provider = "gmail"
+    lower = email.lower()
+    client.provider = (
+        "outlook" if lower.endswith(("@outlook.com", "@hotmail.com", "@live.com")) else "gmail"
+    )
     stubs = [{"id": m["id"], "threadId": m["threadId"]} for m in messages]
-    client.search_messages.return_value = {"messages": stubs}
     msg_by_id = {m["id"]: m for m in messages}
+
+    def search(
+        q: str | None = None,
+        max_results: int = 20,
+        page_token: str | None = None,
+        include_spam_trash: bool = False,
+    ) -> dict[str, Any]:
+        del max_results, page_token, include_spam_trash
+        if q == "is:unread":
+            return {"messages": stubs}
+        return {"messages": []}
+
+    client.search_messages.side_effect = search
     client.read_message.side_effect = lambda mid: msg_by_id[mid]
+    client.list_labels.return_value = []
     return client
 
 
@@ -245,3 +261,100 @@ class TestDigestEngineGenerate:
 
         for key in ("critical", "high", "normal", "low", "junk"):
             assert key in result.summary.by_category
+
+    def test_high_unread_in_starter_folder_is_sorted_away(self) -> None:
+        from src.triage.models import ImportanceScore, MessageCategory
+
+        inbox = _make_msg("in1", subject="Inbox note")
+        filed = _make_msg("f1", from_addr="boss@company.com", subject="Contract review")
+
+        def search(
+            q: str | None = None,
+            max_results: int = 20,
+            page_token: str | None = None,
+            include_spam_trash: bool = False,
+        ) -> dict[str, Any]:
+            del max_results, page_token, include_spam_trash
+            if q == "is:unread":
+                return {"messages": [{"id": "in1", "threadId": "t_in1"}]}
+            if q == "is:unread label:Newsletters":
+                return {"messages": [{"id": "f1", "threadId": "t_f1"}]}
+            return {"messages": []}
+
+        client = MagicMock()
+        client.email_address = "test@gmail.com"
+        client.provider = "gmail"
+        client.search_messages.side_effect = search
+        client.read_message.side_effect = lambda mid: {"in1": inbox, "f1": filed}[mid]
+        client.list_labels.return_value = []
+
+        high = ImportanceScore(
+            message_id="f1",
+            thread_id="t_f1",
+            score=0.7,
+            signals=[],
+            category=MessageCategory.HIGH,
+        )
+        normal = ImportanceScore(
+            message_id="in1",
+            thread_id="t_in1",
+            score=0.2,
+            signals=[],
+            category=MessageCategory.NORMAL,
+        )
+        with patch("src.digest.engine.ImportanceScorer") as mock_cls:
+            mock_cls.return_value.score_messages.return_value = [high, normal]
+            result = DigestEngine(client, _make_cache()).generate()
+
+        ids = [item["message_id"] for item in result.actionable.sorted_away]
+        assert ids == ["f1"]
+        assert result.actionable.sorted_away[0]["folder"] == "Newsletters"
+        assert "in1" not in ids
+
+    def test_junk_category_filed_mail_not_sorted_away(self) -> None:
+        from src.triage.models import ImportanceScore, MessageCategory
+
+        filed = _make_msg("j1", from_addr="promo@shop.com", subject="Sale")
+
+        def search(
+            q: str | None = None,
+            max_results: int = 20,
+            page_token: str | None = None,
+            include_spam_trash: bool = False,
+        ) -> dict[str, Any]:
+            del max_results, page_token, include_spam_trash
+            if q == "is:unread label:Junk":
+                return {"messages": [{"id": "j1", "threadId": "t_j1"}]}
+            return {"messages": []}
+
+        client = MagicMock()
+        client.email_address = "test@gmail.com"
+        client.provider = "gmail"
+        client.search_messages.side_effect = search
+        client.read_message.side_effect = lambda mid: filed
+        client.list_labels.return_value = []
+
+        junk = ImportanceScore(
+            message_id="j1",
+            thread_id="t_j1",
+            score=0.0,
+            signals=[],
+            category=MessageCategory.JUNK,
+        )
+        with patch("src.digest.engine.ImportanceScorer") as mock_cls:
+            mock_cls.return_value.score_messages.return_value = [junk]
+            result = DigestEngine(client, _make_cache()).generate()
+
+        assert result.actionable.sorted_away == []
+
+    def test_outlook_uses_folder_id_in_search(self) -> None:
+        client = MagicMock()
+        client.email_address = "jon@degenito.ai"
+        client.provider = "outlook"
+        client.search_messages.return_value = {"messages": []}
+        client.list_labels.return_value = [
+            {"id": "fld-news", "name": "Newsletters", "type": "system"},
+        ]
+        DigestEngine(client, _make_cache()).generate()
+        qs = [call.kwargs.get("q") for call in client.search_messages.call_args_list]
+        assert "is:unread in:fld-news" in qs
