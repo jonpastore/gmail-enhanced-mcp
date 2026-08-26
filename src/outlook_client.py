@@ -6,10 +6,18 @@ from typing import Any
 
 import requests
 from loguru import logger
+from requests import HTTPError
 
 from .auth import MicrosoftTokenManager
 from .email_client import EmailClient
 from .outlook_query import translate_gmail_query
+from .sort.errors import (
+    OUTLOOK_READONLY_MSG,
+    inbox_search_query,
+    outlook_sort_http_error,
+)
+from .sort.models import MailRule
+from .sort.outlook_translate import from_outlook_rule, to_outlook_rule
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
@@ -59,6 +67,15 @@ class OutlookClient(EmailClient):
         )
         resp.raise_for_status()
         return resp.json()
+
+    def _graph_delete(self, path: str) -> None:
+        token = self._token_mgr.get_token()
+        resp = requests.delete(
+            f"{GRAPH_BASE}{path}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30,
+        )
+        resp.raise_for_status()
 
     def get_profile(self) -> dict[str, Any]:
         data = self._graph_get("/me")
@@ -418,12 +435,14 @@ class OutlookClient(EmailClient):
                     f"/me/messages/{msg['id']}/attachments",
                     params={"$select": "id,name,contentType,size"},
                 ).get("value", []):
-                    parts.append({
-                        "filename": att.get("name", ""),
-                        "mimeType": att.get("contentType", ""),
-                        "body": {"attachmentId": att.get("id", ""), "size": att.get("size", 0)},
-                    })
-            except requests.HTTPError as exc:      # listing is a nicety, never fail the read
+                    parts.append(
+                        {
+                            "filename": att.get("name", ""),
+                            "mimeType": att.get("contentType", ""),
+                            "body": {"attachmentId": att.get("id", ""), "size": att.get("size", 0)},
+                        }
+                    )
+            except requests.HTTPError as exc:  # listing is a nicety, never fail the read
                 logger.warning(f"Could not list attachments for {msg['id']}: {exc}")
 
         label_ids: list[str] = []
@@ -446,3 +465,105 @@ class OutlookClient(EmailClient):
             "sizeEstimate": msg.get("size", 0),
             "internalDate": msg.get("receivedDateTime", ""),
         }
+
+    def create_label(self, name: str) -> dict[str, Any]:
+        """Create a top-level Outlook mail folder."""
+        data = self._graph_post("/me/mailFolders", {"displayName": name}).json()
+        return {"id": data["id"], "name": data.get("displayName", name)}
+
+    def ensure_folders(self, names: list[str]) -> list[dict[str, str]]:
+        """Create any missing top-level mail folders."""
+        existing = {
+            str(folder.get("displayName")): str(folder.get("id"))
+            for folder in self._graph_get("/me/mailFolders").get("value", [])
+        }
+        result: list[dict[str, str]] = []
+        for name in names:
+            if name in existing:
+                result.append({"id": existing[name], "name": name})
+                continue
+            created = self.create_label(name)
+            existing[created["name"]] = created["id"]
+            result.append({"id": created["id"], "name": created["name"]})
+        return result
+
+    def list_sort_rules(self) -> list[MailRule]:
+        """List Outlook inbox rules that move to a folder."""
+        try:
+            data = self._graph_get("/me/mailFolders/inbox/messageRules")
+        except HTTPError as exc:
+            raise outlook_sort_http_error(exc, "list") from exc
+        folder_names = {
+            str(folder.get("id")): str(folder.get("displayName"))
+            for folder in self._graph_get("/me/mailFolders").get("value", [])
+        }
+        rules: list[MailRule] = []
+        for raw in data.get("value", []):
+            parsed = from_outlook_rule(raw, folder_names)
+            if parsed is not None:
+                rules.append(parsed)
+        return rules
+
+    def create_sort_rule(
+        self,
+        rule: MailRule,
+        apply_existing: bool = True,
+        max_existing: int = 200,
+    ) -> MailRule:
+        """Create an Outlook move-to-folder rule and optionally file existing mail."""
+        dest_id = self.ensure_folders([rule.destination])[0]["id"]
+        try:
+            existing = self._graph_get("/me/mailFolders/inbox/messageRules")
+        except HTTPError as exc:
+            raise outlook_sort_http_error(exc, "create") from exc
+        sequences = [int(item.get("sequence") or 0) for item in existing.get("value", [])]
+        sequence = max(sequences, default=0) + 1
+        body = to_outlook_rule(rule, dest_id, sequence)
+        try:
+            created = self._graph_post("/me/mailFolders/inbox/messageRules", body).json()
+        except HTTPError as exc:
+            raise outlook_sort_http_error(exc, "create") from exc
+        updated = rule.model_copy(update={"id": created.get("id")})
+        if apply_existing:
+            counts = self._file_existing(updated, dest_id, max_existing)
+            updated = updated.model_copy(update=counts)
+        return updated
+
+    def delete_sort_rule(self, rule_id: str) -> None:
+        """Delete an Outlook inbox rule. Does not move mail."""
+        try:
+            raw = self._graph_get(f"/me/mailFolders/inbox/messageRules/{rule_id}")
+        except HTTPError as exc:
+            raise outlook_sort_http_error(exc, "delete") from exc
+        if raw.get("isReadOnly"):
+            raise RuntimeError(OUTLOOK_READONLY_MSG)
+        try:
+            self._graph_delete(f"/me/mailFolders/inbox/messageRules/{rule_id}")
+        except HTTPError as exc:
+            raise outlook_sort_http_error(exc, "delete") from exc
+
+    def move_messages(
+        self,
+        message_ids: list[str],
+        destination_id: str,
+    ) -> dict[str, Any]:
+        """Move messages into a mail folder via Graph /move."""
+        moved = 0
+        failed = 0
+        for msg_id in message_ids:
+            try:
+                self._graph_post(
+                    f"/me/messages/{msg_id}/move",
+                    {"destinationId": destination_id},
+                )
+                moved += 1
+            except HTTPError:
+                failed += 1
+        return {"moved": moved, "failed": failed}
+
+    def _file_existing(self, rule: MailRule, dest_id: str, max_existing: int) -> dict[str, int]:
+        query = inbox_search_query(rule.match.from_value, rule.match.subject_contains)
+        found = self.search_messages(q=query, max_results=max_existing)
+        ids = [str(m["id"]) for m in found.get("messages", [])]
+        counts = self.move_messages(ids, dest_id)
+        return {"existing_moved": counts["moved"], "existing_failed": counts["failed"]}

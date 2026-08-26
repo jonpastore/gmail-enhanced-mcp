@@ -3,9 +3,9 @@
 
 objective: Durable mail sorting, attention surfacing, junk unsubscribe, and a digest safety net across Gmail and Outlook
 mode: BROWNFIELD
-lifecycle_phase: SPECIFY
+lifecycle_phase: IMPLEMENTING
 risk_tier: CONSEQUENTIAL
-readiness: SPEC_DRAFTED
+readiness: IMPLEMENTED_PENDING_REAUTH
 
 # Suite currency: policy/core.md not present in installed skill clone; proceeded from SKILL.md contracts.
 
@@ -27,9 +27,9 @@ decisions:
 spec: docs/superpowers/specs/2026-08-25-sort-rules-design.md
 scope_gaps:
   - gmail.settings.basic required to CREATE filters (gmail.modify lists/gets only). Existing gmail_block_sender may 403 on create.
-  - MailboxSettings.ReadWrite required for Outlook messageRules. Current Microsoft scopes are Mail.ReadWrite + Mail.Send only.
-next_specialist: writing-plans
-next_gate: User reviews written spec, then implementation plan
+  - MailboxSettings.ReadWrite required for Outlook messageRules. Scope added in auth.py; Azure app permission still operator-side.
+next_specialist: verification-before-completion
+next_gate: Operator re-auth with gmail.settings.basic and Azure MailboxSettings.ReadWrite
 
 contradictions:
   - Phase 1 design says "no action without user approval"; request includes auto-sort and unsubscribe
@@ -45,8 +45,8 @@ existing_authoritative:
 
 subsystems:
   - id: sort-rules
-    status: MISSING
-    notes: No durable rule CRUD. Gmail has one-shot create_block_filter (trash only). Outlook has no filters/folders create.
+    status: IMPLEMENTED
+    notes: Four MCP tools. Native Gmail filters + Outlook messageRules. Needs re-auth.
   - id: attention
     status: PARTIAL
     notes: triage, needs_reply, follow-ups, priority senders exist; they do not move mail or pin a needs-attention folder.

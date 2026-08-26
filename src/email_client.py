@@ -9,9 +9,12 @@ from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import requests
+
+if TYPE_CHECKING:
+    from .sort.models import MailRule
 
 BLOCKED_EXTENSIONS = {".exe", ".bat", ".cmd", ".scr", ".js", ".vbs", ".msi"}
 MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024
@@ -174,6 +177,35 @@ class EmailClient(ABC):
     def create_label(self, name: str) -> dict[str, Any]:
         """Create a new label/folder."""
         raise NotImplementedError(f"{self.provider} does not support create_label")
+
+    def ensure_folders(self, names: list[str]) -> list[dict[str, str]]:
+        """Create any missing folders/labels. Return [{id, name}, ...] for every name."""
+        raise NotImplementedError(f"{self.provider} does not support ensure_folders")
+
+    def list_sort_rules(self) -> list[MailRule]:
+        """Native skip-inbox / move-to-folder rules."""
+        raise NotImplementedError(f"{self.provider} does not support list_sort_rules")
+
+    def create_sort_rule(
+        self,
+        rule: MailRule,
+        apply_existing: bool = True,
+        max_existing: int = 200,
+    ) -> MailRule:
+        """Create a native sort rule; optionally file existing Inbox matches."""
+        raise NotImplementedError(f"{self.provider} does not support create_sort_rule")
+
+    def delete_sort_rule(self, rule_id: str) -> None:
+        """Delete a native sort rule. Does not move mail."""
+        raise NotImplementedError(f"{self.provider} does not support delete_sort_rule")
+
+    def move_messages(
+        self,
+        message_ids: list[str],
+        destination_id: str,
+    ) -> dict[str, Any]:
+        """Take messages out of Inbox into destination. Return {moved, failed}."""
+        raise NotImplementedError(f"{self.provider} does not support move_messages")
 
     def _resolve_provider_attachment(self, att: dict[str, Any]) -> MIMEBase:
         raise NotImplementedError(

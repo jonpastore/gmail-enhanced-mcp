@@ -326,7 +326,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "gmail_check_followups",
         "description": (
-            "Check all tracked follow-ups for replies," " overdue items, and approaching deadlines."
+            "Check all tracked follow-ups for replies, overdue items, and approaching deadlines."
         ),
         "inputSchema": {
             "type": "object",
@@ -559,7 +559,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "gmail_summarize_thread",
         "description": (
-            "Summarize a thread: participants, timeline, key asks," " deadlines, open questions."
+            "Summarize a thread: participants, timeline, key asks, deadlines, open questions."
         ),
         "inputSchema": {
             "type": "object",
@@ -616,7 +616,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "gmail_extract_itinerary",
         "description": (
-            "Scan emails for travel bookings and return a structured" " itinerary timeline."
+            "Scan emails for travel bookings and return a structured itinerary timeline."
         ),
         "inputSchema": {
             "type": "object",
@@ -662,6 +662,76 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 },
             },
             "required": [],
+        },
+    },
+    {
+        "name": "gmail_ensure_sort_folders",
+        "description": (
+            "Create starter sort folders/labels if missing: Newsletters, Receipts, "
+            "Finance, Travel, Social, Junk. Works for Gmail and Outlook."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "extra": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Additional folder names to create",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "gmail_create_sort_rule",
+        "description": (
+            "Create a native Gmail filter or Outlook inbox rule that files matching "
+            "mail out of Inbox into a named folder. Optionally files existing matches."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Rule display name"},
+                "fromValue": {
+                    "type": "string",
+                    "description": "Sender email address or domain",
+                },
+                "destination": {
+                    "type": "string",
+                    "description": "Folder/label name (created if missing)",
+                },
+                "subjectContains": {
+                    "type": "string",
+                    "description": "Optional subject substring",
+                },
+                "applyExisting": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "File existing Inbox matches now",
+                },
+                "maxExisting": {
+                    "type": "integer",
+                    "default": 200,
+                    "description": "Max existing messages to file (1-500)",
+                },
+            },
+            "required": ["name", "fromValue", "destination"],
+        },
+    },
+    {
+        "name": "gmail_list_sort_rules",
+        "description": ("List native skip-inbox / move-to-folder rules on the selected account."),
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "gmail_delete_sort_rule",
+        "description": ("Delete a native sort rule by id. Mail already filed is left in place."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "ruleId": {"type": "string", "description": "Provider filter or rule id"},
+            },
+            "required": ["ruleId"],
         },
     },
 ]

@@ -15,6 +15,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/gmail.compose",
     "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.settings.basic",
 ]
 
 CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
@@ -55,7 +56,7 @@ class TokenManager:
         if missing:
             scope_names = ", ".join(s.rsplit("/", 1)[-1] for s in missing)
             raise RuntimeError(
-                f"Missing OAuth scope(s): {scope_names}. " "Run: python -m gmail_mcp auth"
+                f"Missing OAuth scope(s): {scope_names}. Run: python -m gmail_mcp auth"
             )
 
     def get_credentials(self) -> Credentials:
@@ -83,6 +84,7 @@ class TokenManager:
 MICROSOFT_SCOPES = [
     "https://graph.microsoft.com/Mail.ReadWrite",
     "https://graph.microsoft.com/Mail.Send",
+    "https://graph.microsoft.com/MailboxSettings.ReadWrite",
     "https://graph.microsoft.com/Calendars.ReadWrite",
     "https://graph.microsoft.com/User.Read",
 ]

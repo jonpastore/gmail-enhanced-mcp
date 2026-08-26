@@ -12,6 +12,9 @@ from loguru import logger
 
 from .auth import TokenManager
 from .email_client import EmailClient
+from .sort.errors import gmail_sort_http_error, inbox_search_query
+from .sort.gmail_translate import from_gmail_filter, to_gmail_filter
+from .sort.models import MailRule
 
 
 @runtime_checkable
@@ -521,3 +524,92 @@ class GmailClient(EmailClient):
         result = svc.users().labels().create(userId="me", body=label_body).execute()
         logger.info(f"Created label: {result.get('name')} ({result.get('id')})")
         return {"id": result["id"], "name": result["name"]}
+
+    def ensure_folders(self, names: list[str]) -> list[dict[str, str]]:
+        """Create any missing Gmail labels. Return id+name for every name."""
+        by_name = {str(lbl.get("name")): str(lbl.get("id")) for lbl in self.list_labels()}
+        result: list[dict[str, str]] = []
+        for name in names:
+            if name in by_name:
+                result.append({"id": by_name[name], "name": name})
+                continue
+            created = self.create_label(name)
+            result.append({"id": str(created["id"]), "name": str(created["name"])})
+        return result
+
+    def list_sort_rules(self) -> list[MailRule]:
+        """List Gmail filters that skip Inbox."""
+        svc = self._get_service()
+        try:
+            data = svc.users().settings().filters().list(userId="me").execute()
+        except HttpError as exc:
+            raise gmail_sort_http_error(exc, "list") from exc
+        names = {str(lbl.get("id")): str(lbl.get("name")) for lbl in self.list_labels()}
+        rules: list[MailRule] = []
+        for raw in data.get("filter", []):
+            parsed = from_gmail_filter(raw, names)
+            if parsed is not None:
+                rules.append(parsed)
+        return rules
+
+    def create_sort_rule(
+        self,
+        rule: MailRule,
+        apply_existing: bool = True,
+        max_existing: int = 200,
+    ) -> MailRule:
+        """Create a Gmail skip-inbox filter and optionally file existing mail."""
+        dest_id = self.ensure_folders([rule.destination])[0]["id"]
+        svc = self._get_service()
+        try:
+            created = (
+                svc.users()
+                .settings()
+                .filters()
+                .create(userId="me", body=to_gmail_filter(rule, dest_id))
+                .execute()
+            )
+        except HttpError as exc:
+            raise gmail_sort_http_error(exc, "create") from exc
+        updated = rule.model_copy(update={"id": created.get("id")})
+        if apply_existing:
+            counts = self._file_existing(updated, dest_id, max_existing)
+            updated = updated.model_copy(update=counts)
+        return updated
+
+    def delete_sort_rule(self, rule_id: str) -> None:
+        """Delete a Gmail filter. Does not move mail."""
+        svc = self._get_service()
+        try:
+            svc.users().settings().filters().delete(userId="me", id=rule_id).execute()
+        except HttpError as exc:
+            raise gmail_sort_http_error(exc, "delete") from exc
+
+    def move_messages(
+        self,
+        message_ids: list[str],
+        destination_id: str,
+    ) -> dict[str, Any]:
+        """Add destination label and remove INBOX via batchModify."""
+        if not message_ids:
+            return {"moved": 0, "failed": 0}
+        svc = self._get_service()
+        try:
+            svc.users().messages().batchModify(
+                userId="me",
+                body={
+                    "ids": message_ids,
+                    "addLabelIds": [destination_id],
+                    "removeLabelIds": ["INBOX"],
+                },
+            ).execute()
+        except HttpError:
+            return {"moved": 0, "failed": len(message_ids)}
+        return {"moved": len(message_ids), "failed": 0}
+
+    def _file_existing(self, rule: MailRule, dest_id: str, max_existing: int) -> dict[str, int]:
+        query = inbox_search_query(rule.match.from_value, rule.match.subject_contains)
+        found = self.search_messages(q=query, max_results=max_existing)
+        ids = [str(m["id"]) for m in found.get("messages", [])]
+        counts = self.move_messages(ids, dest_id)
+        return {"existing_moved": counts["moved"], "existing_failed": counts["failed"]}

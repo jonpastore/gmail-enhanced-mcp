@@ -23,6 +23,11 @@ class TestEmailClientInterface:
             "send_draft",
             "send_email",
             "build_mime_message",
+            "ensure_folders",
+            "list_sort_rules",
+            "create_sort_rule",
+            "delete_sort_rule",
+            "move_messages",
         ]
         for method in methods:
             assert hasattr(EmailClient, method), f"Missing method: {method}"

@@ -39,6 +39,12 @@ from .search import (
     handle_search_messages,
 )
 from .send import handle_send_email
+from .sort import (
+    handle_create_sort_rule,
+    handle_delete_sort_rule,
+    handle_ensure_sort_folders,
+    handle_list_sort_rules,
+)
 from .templates import handle_save_template, handle_use_template
 from .tool_schemas import TOOL_DEFINITIONS
 from .triage import (
@@ -93,6 +99,10 @@ _HANDLER_MAP: dict[str, Any] = {
     "gmail_meeting_prep": handle_meeting_prep,
     "gmail_today_briefing": handle_today_briefing,
     "gmail_generate_digest": handle_generate_digest,
+    "gmail_ensure_sort_folders": handle_ensure_sort_folders,
+    "gmail_create_sort_rule": handle_create_sort_rule,
+    "gmail_list_sort_rules": handle_list_sort_rules,
+    "gmail_delete_sort_rule": handle_delete_sort_rule,
 }
 
 

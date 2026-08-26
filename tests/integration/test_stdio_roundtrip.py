@@ -59,7 +59,7 @@ class TestStdioRoundtrip:
 
     def test_tools_list_returns_39_tools(self) -> None:
         results = _roundtrip({"jsonrpc": "2.0", "method": "tools/list", "params": {}, "id": 2})
-        assert len(results[0]["result"]["tools"]) == 39
+        assert len(results[0]["result"]["tools"]) == 43
 
     def test_tool_call_get_profile(self) -> None:
         results = _roundtrip(

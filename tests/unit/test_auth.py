@@ -6,7 +6,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.auth import TokenManager
+from src.auth import MICROSOFT_SCOPES, SCOPES, TokenManager
+
+
+class TestScopes:
+    def test_gmail_includes_settings_basic(self) -> None:
+        assert "https://www.googleapis.com/auth/gmail.settings.basic" in SCOPES
+
+    def test_microsoft_includes_mailbox_settings(self) -> None:
+        assert "https://graph.microsoft.com/MailboxSettings.ReadWrite" in MICROSOFT_SCOPES
 
 
 class TestTokenManager:
