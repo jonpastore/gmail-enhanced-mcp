@@ -51,14 +51,14 @@ subsystems:
     status: PARTIAL
     notes: triage, needs_reply, follow-ups, priority senders exist; they do not move mail or pin a needs-attention folder.
   - id: unsubscribe
-    status: PARTIAL
-    notes: gmail_get_unsubscribe_link extracts List-Unsubscribe and does not execute. Outlook unimplemented.
+    status: IMPLEMENTED
+    notes: gmail_unsubscribe executes RFC 8058 one-click POST or mailto send; optional Junk rule. Extract works on Outlook.
   - id: junk-rules
     status: PARTIAL
     notes: JunkDetector + AutoSortProposal + gmail_block_sender/report_spam. No durable "sort to junk folder" rule, no Outlook parity.
   - id: digest-safety-net
-    status: PARTIAL
-    notes: gmail_generate_digest + scripts/generate-digest.py. Does not report auto-sorted unread that still needs attention.
+    status: IMPLEMENTED
+    notes: Digest searches STARTER_FOLDERS for unread; actionable.sorted_away lists critical/high filed mail.
 
 providers:
   gmail: implemented

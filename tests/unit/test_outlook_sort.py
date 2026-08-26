@@ -103,6 +103,24 @@ class TestCreateSortRule:
             client.create_sort_rule(_rule(), apply_existing=False)
 
 
+class TestExtractUnsubscribe:
+    @patch("src.outlook_client.requests")
+    def test_parses_internet_message_headers(self, mock_requests: MagicMock) -> None:
+        mock_requests.get.return_value = _json_resp(
+            {
+                "internetMessageHeaders": [
+                    {"name": "List-Unsubscribe", "value": "<https://example.com/unsub>"},
+                    {"name": "List-Unsubscribe-Post", "value": "List-Unsubscribe=One-Click"},
+                ]
+            }
+        )
+        client = _make_client()
+        result = client.extract_unsubscribe_link("m1")
+        assert result["found"] is True
+        assert result["one_click"] is True
+        assert result["unsubscribe_url"] == "https://example.com/unsub"
+
+
 class TestDeleteSortRule:
     @patch("src.outlook_client.requests")
     def test_read_only_rule_actionable_error(self, mock_requests: MagicMock) -> None:

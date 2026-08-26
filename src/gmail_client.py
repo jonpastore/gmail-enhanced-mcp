@@ -465,15 +465,15 @@ class GmailClient(EmailClient):
         return contacts
 
     def extract_unsubscribe_link(self, message_id: str) -> dict[str, Any]:
-        """Extract List-Unsubscribe header from a message.
+        """Extract List-Unsubscribe headers from a message.
 
         Args:
             message_id: The message ID to inspect.
 
         Returns:
-            Dict with found, unsubscribe_url, unsubscribe_mailto.
+            Dict with found, unsubscribe_url, unsubscribe_mailto, one_click.
         """
-        import re
+        from .sort.unsub import parse_unsubscribe_headers
 
         svc = self._get_service()
         msg = (
@@ -483,28 +483,12 @@ class GmailClient(EmailClient):
                 userId="me",
                 id=message_id,
                 format="metadata",
-                metadataHeaders=["List-Unsubscribe"],
+                metadataHeaders=["List-Unsubscribe", "List-Unsubscribe-Post"],
             )
             .execute()
         )
         headers = msg.get("payload", {}).get("headers", [])
-        unsub_header = ""
-        for h in headers:
-            if h["name"].lower() == "list-unsubscribe":
-                unsub_header = h["value"]
-                break
-        if not unsub_header:
-            return {"found": False, "unsubscribe_url": None, "unsubscribe_mailto": None}
-
-        links = re.findall(r"<([^>]+)>", unsub_header)
-        url: str | None = None
-        mailto: str | None = None
-        for link in links:
-            if link.startswith("https://") or link.startswith("http://"):
-                url = link
-            elif link.startswith("mailto:"):
-                mailto = link
-        return {"found": True, "unsubscribe_url": url, "unsubscribe_mailto": mailto}
+        return parse_unsubscribe_headers(headers)
 
     def create_label(self, name: str) -> dict[str, Any]:
         """Create a new Gmail label.

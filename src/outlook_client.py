@@ -567,3 +567,14 @@ class OutlookClient(EmailClient):
         ids = [str(m["id"]) for m in found.get("messages", [])]
         counts = self.move_messages(ids, dest_id)
         return {"existing_moved": counts["moved"], "existing_failed": counts["failed"]}
+
+    def extract_unsubscribe_link(self, message_id: str) -> dict[str, Any]:
+        """Extract List-Unsubscribe headers from an Outlook message."""
+        from .sort.unsub import parse_unsubscribe_headers
+
+        data = self._graph_get(
+            f"/me/messages/{message_id}",
+            {"$select": "internetMessageHeaders"},
+        )
+        headers = data.get("internetMessageHeaders") or []
+        return parse_unsubscribe_headers(headers)

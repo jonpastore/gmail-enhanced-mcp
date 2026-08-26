@@ -734,6 +734,26 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["ruleId"],
         },
     },
+    {
+        "name": "gmail_unsubscribe",
+        "description": (
+            "Unsubscribe using List-Unsubscribe on a message (RFC 8058 one-click "
+            "POST preferred; mailto send if that is all the message provides). "
+            "Optionally create a Junk sort rule for the sender. Works for Gmail and Outlook."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "messageId": {"type": "string", "description": "Message to unsubscribe from"},
+                "createJunkRule": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Also create a native rule filing this sender to Junk",
+                },
+            },
+            "required": ["messageId"],
+        },
+    },
 ]
 
 for _tool in TOOL_DEFINITIONS:

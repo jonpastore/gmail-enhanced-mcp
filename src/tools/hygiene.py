@@ -133,10 +133,6 @@ def handle_import_contacts_as_priority(args: dict[str, Any], ctx: HandlerContext
 
 def handle_get_unsubscribe_link(args: dict[str, Any], ctx: HandlerContext) -> dict[str, Any]:
     """Extract unsubscribe link from a message."""
-    guard = _gmail_only(ctx.client)
-    if guard:
-        return guard
-
     message_id = args.get("messageId")
     if not message_id:
         return _text_content("messageId is required.")

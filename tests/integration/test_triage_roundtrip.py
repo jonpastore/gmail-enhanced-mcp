@@ -50,10 +50,10 @@ class TestTriageToolsInRegistry:
         assert "gmail_check_followups" in names
         assert "gmail_reset_triage_cache" in names
 
-    def test_total_tool_count_is_43(self) -> None:
+    def test_total_tool_count_is_44(self) -> None:
         registry, _ = _make_registry()
         tools = registry.list_tools()
-        assert len(tools) == 43
+        assert len(tools) == 44
 
     def test_triage_inbox_via_execute(self) -> None:
         registry, _ = _make_registry()

@@ -56,6 +56,7 @@ from .triage import (
     handle_track_followup,
     handle_triage_inbox,
 )
+from .unsubscribe import handle_unsubscribe
 
 if TYPE_CHECKING:
     from ..account_registry import AccountRegistry
@@ -103,6 +104,7 @@ _HANDLER_MAP: dict[str, Any] = {
     "gmail_create_sort_rule": handle_create_sort_rule,
     "gmail_list_sort_rules": handle_list_sort_rules,
     "gmail_delete_sort_rule": handle_delete_sort_rule,
+    "gmail_unsubscribe": handle_unsubscribe,
 }
 
 
